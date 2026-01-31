@@ -1,8 +1,15 @@
 {
   "active_plan": "/Users/daozhang/Trae_AI/B站商品评论解析/.sisyphus/plans/bilibili-product-analyzer.md",
-  "started_at": "2026-01-31T18:24:37.487Z",
+  "started_at": "2026-01-31T18:24:37.486Z",
+  "completed_at": "2026-02-01T03:20:00.000Z",
   "session_ids": [
     "ses_3eaf4af4effelW4EnCOfhVsA6n"
   ],
-  "plan_name": "bilibili-product-analyzer"
+  "plan_name": "bilibili-product-analyzer",
+  "status": "completed",
+  "tasks_completed": 12,
+  "tasks_total": 12,
+  "acceptance_criteria_met": 13,
+  "commits": 7,
+  "duration_minutes": 56
 }

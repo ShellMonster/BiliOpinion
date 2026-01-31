@@ -423,7 +423,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 6. 搜索与评论抓取 + SSE状态推送
+- [x] 6. 搜索与评论抓取 + SSE状态推送
 
   **What to do**:
   - 实现B站视频搜索API调用
@@ -500,7 +500,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 7. AI关键词解析与澄清
+- [x] 7. AI关键词解析与澄清
 
   **What to do**:
   - 设计关键词解析Prompt，要求AI返回:
@@ -559,7 +559,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 8. AI评论分析
+- [x] 8. AI评论分析
 
   **What to do**:
   - 设计评论分析Prompt

@@ -327,3 +327,200 @@ response, err := client.ChatCompletion(ctx, messages)
 1. **SSE自动重连**: 连接断开后3秒自动重连
 2. **统一错误处理**: axios拦截器捕获所有API错误
 3. **设置持久化**: localStorage存储AI和Cookie配置
+
+## [2026-02-01] Task 6: 搜索与评论抓取 + SSE状态推送
+
+### 视频搜索实现 (bilibili/search.go)
+- **API端点**: `https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=video`
+- **需要WBI签名**: 是
+- **分页支持**: page + page_size (最大50)
+- **返回字段**: bvid, aid, title, author, mid, play, video_review, favorites, duration, pic, description, pubdate
+- **数量限制**: 最多50个视频（通过SearchVideosWithLimit实现）
+
+### 评论抓取实现 (bilibili/comment.go)
+- **评论API**: `https://api.bilibili.com/x/v2/reply?type=1&oid={avid}`
+- **楼中楼API**: `https://api.bilibili.com/x/v2/reply/reply?type=1&oid={avid}&root={rpid}`
+- **需要WBI签名**: 否
+- **分页限制**: 每页最多20条
+- **排序方式**: 0=时间, 1=点赞, 2=回复数
+- **数量限制**: 最多500条评论（通过GetAllComments实现）
+
+### 并发抓取器 (bilibili/scraper.go)
+- **并发控制**: 使用 `golang.org/x/sync/semaphore` 限制并发数
+- **默认配置**:
+  - MaxVideos: 50
+  - MaxCommentsPerVideo: 500
+  - MaxConcurrency: 5
+  - FetchReplies: true
+  - RequestDelay: 200ms
+- **进度回调**: ProgressCallback 函数类型，支持实时进度推送
+- **错误处理**: 单个视频抓取失败不影响整体，记录到Stats.Errors
+
+### SSE服务端实现 (sse/handler.go + sse/manager.go)
+- **响应头设置**:
+  - Content-Type: text/event-stream
+  - Cache-Control: no-cache
+  - Connection: keep-alive
+  - X-Accel-Buffering: no (禁用Nginx缓冲)
+- **消息格式**: `data: {json}\n\n`
+- **任务状态常量**:
+  - parsing: 正在解析用户输入
+  - waiting_confirm: 等待用户确认
+  - searching: 正在搜索视频
+  - scraping: 正在抓取评论
+  - analyzing: 正在AI分析
+  - generating: 正在生成报告
+  - completed: 任务完成
+  - error: 任务出错
+  - cancelled: 任务取消
+
+### 任务状态管理 (sse/manager.go)
+- **通道管理**: map[string]chan TaskStatus
+- **线程安全**: sync.RWMutex 保护读写
+- **缓冲大小**: 100条消息
+- **便捷方法**:
+  - PushProgress: 推送进度更新
+  - PushError: 推送错误状态
+  - PushCompleted: 推送完成状态
+  - GetActiveTaskCount: 获取活跃任务数
+  - GetActiveTaskIDs: 获取所有活跃任务ID
+
+### 关键设计决策
+1. **BV号转AV号**: 评论API使用AV号，搜索API返回BV号，需要转换
+2. **非阻塞推送**: 通道满时跳过消息，避免阻塞主流程
+3. **请求间隔**: 200ms延迟，避免触发B站反爬
+4. **楼中楼限制**: 每条评论最多获取10条楼中楼，避免请求过多
+
+### 验证结果
+- ✅ `go build ./...` 编译通过
+- ✅ `go mod tidy` 依赖整理完成
+- ✅ 文件创建完成:
+  - backend/bilibili/search.go
+  - backend/bilibili/comment.go
+  - backend/bilibili/scraper.go
+  - backend/sse/handler.go
+  - backend/sse/manager.go
+
+### 使用示例
+```go
+// 创建客户端和抓取器
+client := bilibili.NewClient(cookie)
+scraper := bilibili.NewScraper(client, nil)
+
+// 设置进度回调（集成SSE）
+scraper.SetProgressCallback(func(stage string, current, total int, message string) {
+    sse.PushProgress(taskID, stage, current, total, message)
+})
+
+// 执行抓取
+ctx := context.Background()
+result, err := scraper.ScrapeByKeyword(ctx, "iPhone 15 评测")
+```
+
+## [2026-02-01] Task 8: AI评论分析功能
+
+### 功能实现
+
+#### 1. 单条评论分析 (AnalyzeComment)
+- **输入**: 评论内容 + 评价维度列表
+- **输出**: 各维度得分(1-10分)，未提及维度返回null
+- **Prompt设计**:
+  - 系统提示词定义评分标准（1-3差评，4-5一般，6-7较好，8-10优秀）
+  - 强调只根据明确提及的内容打分
+  - 要求严格返回JSON格式
+
+#### 2. 批量并发分析 (AnalyzeCommentsBatch)
+- **并发模式**: 使用goroutine + sync.WaitGroup
+- **错误处理**: 单条失败不影响其他评论，记录错误信息
+- **结果统计**: 返回成功/失败数量
+
+#### 3. 带速率限制的批量分析 (AnalyzeCommentsWithRateLimit)
+- **分批处理**: 按batchSize分批，默认5条/批
+- **容错设计**: 单批失败继续处理下一批
+
+### 数据结构
+
+```go
+// 评论输入
+type CommentInput struct {
+    ID      string // 评论ID
+    Content string // 评论内容
+}
+
+// 分析结果
+type CommentAnalysisResult struct {
+    CommentID string              // 评论ID
+    Content   string              // 评论内容
+    Scores    map[string]*float64 // 各维度得分，nil表示未提及
+    Error     string              // 错误信息
+}
+```
+
+### JSON响应解析
+- **直接解析**: 尝试直接解析JSON
+- **正则提取**: 如果AI返回额外文字，使用正则提取JSON部分
+- **模式**: `\{[\s\S]*"scores"[\s\S]*\}`
+
+### 测试覆盖
+- ✅ TestParseAnalysisResponse: JSON解析测试（正常JSON、带额外文字、无效JSON）
+- ✅ TestAnalyzeCommentValidation: 输入验证（空评论、空维度）
+- ✅ TestAnalyzeCommentsBatchValidation: 批量分析输入验证
+- ✅ TestCommentInput/TestCommentAnalysisResult: 数据结构测试
+
+### 关键决策
+1. **Dimension复用**: 使用keyword.go中已定义的Dimension类型，避免重复定义
+2. **nil表示未提及**: 使用`*float64`指针类型，nil表示评论未提及该维度
+3. **并发控制**: 依赖Client的semaphore控制总并发数
+4. **错误容忍**: 批量分析时单条失败不中断整体流程
+
+### 文件结构
+- `backend/ai/analysis.go` (7KB): 评论分析实现
+- `backend/ai/analysis_test.go` (3KB): 单元测试
+
+## Task 7: AI关键词解析与澄清 (2026-02-01)
+
+### 实现内容
+1. **关键词解析逻辑** (`backend/ai/keyword.go`)
+   - 实现 `ParseKeyword` 方法，调用AI解析用户输入的商品类目
+   - AI返回：澄清描述、品牌列表、6个评价维度、搜索关键词
+   - 验证AI返回结果的完整性（品牌不为空、维度必须6个）
+
+2. **解析API** (`backend/api/parse.go`)
+   - POST `/api/parse` 接收用户输入的商品类目
+   - 从数据库读取AI配置（API Key、API Base、Model）
+   - 调用AI解析并返回JSON结果
+
+3. **确认API** (`backend/api/confirm.go`)
+   - POST `/api/confirm` 接收用户确认的解析结果
+   - 生成唯一任务ID
+   - 创建SSE状态通道
+   - 启动后台goroutine处理任务（占位，Task 8/9实现）
+   - 返回task_id供前端连接SSE
+
+4. **SSE状态管理** (`backend/sse/`)
+   - 复用已有的SSE基础设施（handler.go, manager.go）
+   - TaskStatus结构包含：task_id, status, progress, message
+   - 支持状态：parsing, searching, scraping, analyzing, generating, completed, error
+
+5. **路由注册** (`backend/main.go`)
+   - 注册 `/api/parse` 和 `/api/confirm` 路由
+   - 注册 `/api/sse` SSE接口
+   - 配置CORS允许前端跨域访问
+
+### 技术要点
+- AI Prompt设计：要求返回JSON格式，包含clarification、brands、dimensions、keywords
+- 评价维度动态生成：AI根据商品类目特点生成6个维度
+- SSE通道管理：使用map存储task_id到channel的映射，支持并发访问
+- 非阻塞推送：使用select+default避免通道满时阻塞
+
+### 测试结果
+- 服务器成功启动在 http://localhost:8080
+- API路由正确注册
+- 解析API返回正确错误提示（AI未配置时）
+- 编译通过，无LSP错误
+
+### 后续任务
+- Task 8: 实现B站视频搜索和评论抓取
+- Task 9: 实现AI评论分析和报告生成
+- 在confirm API的后台任务中调用搜索、抓取、分析逻辑
+

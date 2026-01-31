@@ -44,6 +44,11 @@ func main() {
 
 		// SSE接口 - 前端通过此接口接收任务实时进度
 		apiGroup.GET("/sse", sse.HandleSSE)
+
+		// 历史记录API
+		apiGroup.GET("/history", api.HandleGetHistory)           // 获取历史记录列表
+		apiGroup.GET("/history/:id", api.HandleGetHistoryDetail) // 获取历史记录详情
+		apiGroup.DELETE("/history/:id", api.HandleDeleteHistory) // 删除历史记录
 	}
 
 	// 启动服务器

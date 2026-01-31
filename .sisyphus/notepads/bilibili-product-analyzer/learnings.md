@@ -524,3 +524,71 @@ type CommentAnalysisResult struct {
 - Task 9: 实现AI评论分析和报告生成
 - 在confirm API的后台任务中调用搜索、抓取、分析逻辑
 
+
+## 报告生成模块 (2026-02-01)
+
+### 实现内容
+1. **报告生成器** (`backend/report/generator.go`)
+   - `GenerateReport()`: 主函数，生成完整报告
+   - `generateRankings()`: 计算品牌排名
+   - `generateRecommendation()`: 生成购买建议
+   - `SaveReport()`: 保存报告到数据库
+
+### 核心算法
+1. **得分计算**
+   - 遍历每个品牌的所有评论分析结果
+   - 按维度累加得分，记录有效评分数量
+   - 计算平均值：总分 / 有效评分数
+
+2. **排名生成**
+   - 计算综合得分：所有维度得分的平均值
+   - 按综合得分降序排序
+   - 分配排名号（1表示第一名）
+
+3. **购买建议**
+   - 识别第一名品牌
+   - 找出优势维度（得分>=8.0）
+   - 提及第二名品牌（如果存在）
+   - 生成人性化的推荐文本
+
+### 数据结构
+```go
+type ReportData struct {
+    Category       string                        // 商品类别
+    Brands         []string                      // 品牌列表
+    Dimensions     []ai.Dimension                // 评价维度
+    Scores         map[string]map[string]float64 // 品牌->维度->得分
+    Rankings       []BrandRanking                // 排名列表
+    Recommendation string                        // 购买建议
+}
+
+type BrandRanking struct {
+    Brand        string             // 品牌名称
+    OverallScore float64            // 综合得分
+    Rank         int                // 排名
+    Scores       map[string]float64 // 各维度得分
+}
+```
+
+### 测试结果
+- ✅ 所有测试通过（4个测试用例）
+- ✅ 得分计算正确（平均值算法验证）
+- ✅ 排名顺序正确（按综合得分降序）
+- ✅ 购买建议生成合理
+
+### 示例输出
+```
+综合评价最高的是 苹果（综合得分：8.8分），在 [性能 拍照 续航] 方面表现突出。
+小米（8.2分）紧随其后。建议根据个人需求和预算选择合适的产品。
+```
+
+### 设计亮点
+1. **简洁的算法**：使用简单的平均值计算，易于理解和维护
+2. **灵活的维度**：支持任意数量和类型的评价维度
+3. **人性化建议**：自动识别优势维度，生成易读的推荐文本
+4. **完整的测试**：覆盖主要功能和边界情况
+
+### 后续集成
+- 需要在 `api/confirm.go` 中调用 `GenerateReport()`
+- 需要实现 `SaveReport()` 的数据库保存逻辑
+- 前端需要展示报告数据（排名、得分、建议）

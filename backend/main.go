@@ -49,6 +49,10 @@ func main() {
 		apiGroup.GET("/history", api.HandleGetHistory)           // 获取历史记录列表
 		apiGroup.GET("/history/:id", api.HandleGetHistoryDetail) // 获取历史记录详情
 		apiGroup.DELETE("/history/:id", api.HandleDeleteHistory) // 删除历史记录
+
+		// 配置API
+		apiGroup.GET("/config", api.HandleGetConfig)   // 获取配置
+		apiGroup.POST("/config", api.HandleSaveConfig) // 保存配置
 	}
 
 	// 启动服务器

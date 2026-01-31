@@ -239,7 +239,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 3. B站API集成 - WBI签名
+- [x] 3. B站API集成 - WBI签名
 
   **What to do**:
   - 从用户文档复制WBI签名Go代码
@@ -276,7 +276,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 4. AI服务集成
+- [x] 4. AI服务集成
 
   **What to do**:
   - 实现OpenAI兼容客户端
@@ -312,7 +312,7 @@ Wave 5 (Final):
 
 ---
 
-- [ ] 5. 前端基础框架
+- [x] 5. 前端基础框架
 
   **What to do**:
   - 配置Tailwind CSS

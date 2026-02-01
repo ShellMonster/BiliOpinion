@@ -2,20 +2,22 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const Home = () => {
-  const [url, setUrl] = useState('')
+  const [requirement, setRequirement] = useState('')
   const navigate = useNavigate()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!url.trim()) return
-    // Navigate to confirm page with the URL
-    navigate(`/confirm?url=${encodeURIComponent(url)}`)
+    if (!requirement.trim()) return
+    // Navigate to confirm page with the requirement
+    navigate(`/confirm?requirement=${encodeURIComponent(requirement.trim())}`)
   }
 
   const examples = [
-    "https://www.bilibili.com/video/BV1xx411c7mD",
-    "https://www.bilibili.com/video/BV1GJ411x7h7",
-    "BV1xx411c7mD"
+    "想买个机械键盘，主要打游戏用",
+    "预算3000买个投影仪，卧室用",
+    "想买个空气炸锅，一个人用",
+    "家用吸尘器，有宠物",
+    "蓝牙耳机，通勤降噪"
   ]
 
   return (
@@ -25,7 +27,7 @@ const Home = () => {
           Bilibili 评论分析
         </h1>
         <p className="text-xl text-gray-500 font-light">
-          洞察用户反馈，提炼产品价值
+          告诉我你想买什么，AI帮你分析真实评价
         </p>
       </div>
 
@@ -35,14 +37,14 @@ const Home = () => {
           <div className="relative">
             <input
               type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="输入 Bilibili 视频链接或 BV 号..."
+              value={requirement}
+              onChange={(e) => setRequirement(e.target.value)}
+              placeholder="描述你的需求，比如：想买个吸尘器，预算2000，家里有宠物..."
               className="w-full p-6 pr-16 text-lg rounded-2xl border border-gray-200 shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 backdrop-blur-xl transition-all"
             />
             <button
               type="submit"
-              disabled={!url.trim()}
+              disabled={!requirement.trim()}
               className="absolute right-3 top-3 bottom-3 aspect-square bg-gray-900 text-white rounded-xl hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center cursor-pointer"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
@@ -58,10 +60,10 @@ const Home = () => {
         {examples.map((ex, i) => (
           <button
             key={i}
-            onClick={() => setUrl(ex)}
+            onClick={() => setRequirement(ex)}
             className="px-3 py-1 bg-white/50 hover:bg-white border border-transparent hover:border-gray-200 rounded-full transition-all cursor-pointer"
           >
-            {ex.includes('http') ? '视频示例 ' + (i + 1) : ex}
+            {ex}
           </button>
         ))}
       </div>

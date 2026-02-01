@@ -8,6 +8,7 @@ import (
 // 永久保存所有分析任务的历史记录，用于历史查询和追溯
 type AnalysisHistory struct {
 	ID           uint      `gorm:"primaryKey"`              // 主键ID
+	TaskID       string    `gorm:"index;size:36"`           // 任务ID（UUID格式，用于SSE连接和进度查看）
 	Category     string    `gorm:"index;not null"`          // 商品类目（如：吸尘器、手机）
 	Keywords     string    `gorm:"type:text"`               // 搜索关键词JSON数组（如：["吸尘器评测","吸尘器推荐"]）
 	Brands       string    `gorm:"type:text"`               // 品牌列表JSON数组（如：["戴森","小米","石头"]）

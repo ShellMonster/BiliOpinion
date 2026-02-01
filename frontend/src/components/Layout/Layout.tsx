@@ -1,11 +1,14 @@
 import { Link } from 'react-router-dom'
-import { type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
+import SettingsModal from '../Settings/SettingsModal'
 
 interface LayoutProps {
   children: ReactNode
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Header */}
@@ -22,9 +25,13 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/history" className="text-slate-600 hover:text-slate-900 font-medium">
                 历史记录
               </Link>
-              <Link to="/settings" className="text-slate-600 hover:text-slate-900 font-medium">
+              <button 
+                type="button"
+                onClick={() => setIsSettingsOpen(true)} 
+                className="text-slate-600 hover:text-slate-900 font-medium cursor-pointer bg-transparent border-none"
+              >
                 设置
-              </Link>
+              </button>
             </nav>
           </div>
         </div>
@@ -34,6 +41,11 @@ export default function Layout({ children }: LayoutProps) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+      
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+      />
     </div>
   )
 }

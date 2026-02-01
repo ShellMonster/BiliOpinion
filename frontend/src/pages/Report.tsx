@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell
-} from 'recharts'
+import ReactECharts from 'echarts-for-react'
+import ReactMarkdown from 'react-markdown'
 
 interface BrandRanking {
   brand: string
   overall_score: number
   rank: number
   scores: Record<string, number>
+}
+
+interface ModelRanking {
+  model: string
+  brand: string
+  overall_score: number
+  rank: number
+  scores: Record<string, number>
+  comment_count: number
 }
 
 interface Dimension {
@@ -40,6 +46,7 @@ interface ReportData {
   dimensions: Dimension[]
   scores: Record<string, Record<string, number>>
   rankings: BrandRanking[]
+  model_rankings?: ModelRanking[]
   recommendation: string
   stats?: ReportStats
   top_comments?: Record<string, TypicalComment[]>
@@ -62,6 +69,7 @@ const Report = () => {
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<ApiResponse | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [specifiedBrands, setSpecifiedBrands] = useState<string[]>([])
 
   const handleExportPDF = async () => {
     if (!id) return
@@ -99,6 +107,18 @@ const Report = () => {
         }
         const data = await response.json()
         setReport(data)
+
+        if (data.history_id) {
+          try {
+            const historyRes = await fetch(`http://localhost:8080/api/history/${data.history_id}`)
+            if (historyRes.ok) {
+              const historyData = await historyRes.json()
+              setSpecifiedBrands(historyData.brands || [])
+            }
+          } catch (e) {
+            console.error("Failed to fetch history brands", e)
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : '加载报告失败')
       } finally {
@@ -136,22 +156,6 @@ const Report = () => {
   const reportData = report.data
   const topBrand = reportData.rankings[0]
 
-  const radarData = reportData.dimensions.map(dim => ({
-    subject: dim.name,
-    ...Object.fromEntries(
-      reportData.brands.map(brand => [
-        brand,
-        reportData.scores[brand]?.[dim.name] ? reportData.scores[brand][dim.name] * 10 : 0
-      ])
-    ),
-    fullMark: 100
-  }))
-
-  const barData = reportData.rankings.map(r => ({
-    name: r.brand,
-    score: Math.round(r.overall_score * 10) / 10
-  }))
-
   const strengths = reportData.dimensions
     .filter(dim => topBrand?.scores[dim.name] >= 8)
     .map(dim => dim.name)
@@ -161,6 +165,134 @@ const Report = () => {
     .map(dim => dim.name)
 
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+
+  // ECharts 雷达图配置
+  const radarOption = {
+    tooltip: {
+      trigger: 'item'
+    },
+    legend: {
+      data: reportData.brands.slice(0, 3),
+      bottom: 10,
+      textStyle: {
+        fontSize: 12
+      }
+    },
+    radar: {
+      indicator: reportData.dimensions.map(dim => ({
+        name: dim.name,
+        max: 100
+      })),
+      splitNumber: 4,
+      name: {
+        textStyle: {
+          color: '#6b7280',
+          fontSize: 11
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#e5e7eb'
+        }
+      },
+      splitArea: {
+        show: true,
+        areaStyle: {
+          color: ['rgba(255, 255, 255, 0)', 'rgba(249, 250, 251, 0.5)']
+        }
+      },
+      axisLine: {
+        lineStyle: {
+          color: '#e5e7eb'
+        }
+      }
+    },
+    series: [{
+      type: 'radar',
+      data: reportData.brands.slice(0, 3).map((brand, index) => ({
+        value: reportData.dimensions.map(dim => 
+          reportData.scores[brand]?.[dim.name] ? reportData.scores[brand][dim.name] * 10 : 0
+        ),
+        name: brand,
+        lineStyle: {
+          color: colors[index],
+          width: 2
+        },
+        areaStyle: {
+          color: colors[index],
+          opacity: 0.2
+        },
+        itemStyle: {
+          color: colors[index]
+        }
+      }))
+    }]
+  }
+
+  // ECharts 柱状图配置
+  const barOption = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    grid: {
+      left: 80,
+      right: 30,
+      top: 20,
+      bottom: 20
+    },
+    xAxis: {
+      type: 'value',
+      max: 10,
+      axisLine: {
+        show: false
+      },
+      axisTick: {
+        show: false
+      },
+      axisLabel: {
+        color: '#6b7280'
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#f0f0f0'
+        }
+      }
+    },
+    yAxis: {
+      type: 'category',
+      data: reportData.rankings.map(r => r.brand),
+      axisLine: {
+        show: false
+      },
+      axisTick: {
+        show: false
+      },
+      axisLabel: {
+        color: '#6b7280'
+      }
+    },
+    series: [{
+      type: 'bar',
+      data: reportData.rankings.map((r, index) => ({
+        value: Math.round(r.overall_score * 10) / 10,
+        itemStyle: {
+          color: colors[index % colors.length],
+          borderRadius: [0, 8, 8, 0]
+        }
+      })),
+      barWidth: 30,
+      label: {
+        show: true,
+        position: 'right',
+        formatter: '{c}',
+        color: '#374151',
+        fontWeight: 'bold'
+      }
+    }]
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -273,59 +405,55 @@ const Report = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass-card lg:col-span-1 min-h-[400px]">
           <h3 className="text-lg font-semibold text-gray-800 mb-4 text-center">多维度对比</h3>
-          <div className="w-full h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                <PolarGrid stroke="#e5e7eb" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 11 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                {reportData.brands.slice(0, 3).map((brand, index) => (
-                  <Radar
-                    key={brand}
-                    name={brand}
-                    dataKey={brand}
-                    stroke={colors[index]}
-                    strokeWidth={2}
-                    fill={colors[index]}
-                    fillOpacity={0.2}
-                  />
-                ))}
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-center gap-4 mt-2">
-            {reportData.brands.slice(0, 3).map((brand, index) => (
-              <div key={brand} className="flex items-center gap-1 text-xs">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }}></div>
-                <span>{brand}</span>
-              </div>
-            ))}
-          </div>
+          <ReactECharts option={radarOption} style={{ height: '320px' }} />
         </div>
 
         <div className="glass-card lg:col-span-2 min-h-[400px]">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">品牌综合得分排名</h3>
-          <div className="w-full h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} layout="vertical" margin={{ top: 20, right: 30, left: 60, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                <XAxis type="number" domain={[0, 10]} axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} />
-                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280' }} />
-                <Tooltip 
-                  cursor={{ fill: '#f8fafc' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Bar dataKey="score" radius={[0, 8, 8, 0]} barSize={30}>
-                  {barData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ReactECharts option={barOption} style={{ height: '320px' }} />
         </div>
       </div>
+
+      {reportData.model_rankings && reportData.model_rankings.length > 0 && (
+        <div className="glass-card">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">🏆 型号排名 (Model Rankings)</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-center py-3 px-4 font-semibold text-gray-600">排名</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-600">型号</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-600">品牌</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-600">综合得分</th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-600">样本数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData.model_rankings.map((ranking, index) => (
+                  <tr key={`${ranking.brand}-${ranking.model}`} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="text-center py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 ${index === 0 ? 'text-blue-600 font-bold' : ''}`}>
+                        {index === 0 && <span className="text-yellow-500">🥇</span>}
+                        {index === 1 && <span className="text-gray-400">🥈</span>}
+                        {index === 2 && <span className="text-orange-400">🥉</span>}
+                        {ranking.rank}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-medium text-gray-800">{ranking.model}</td>
+                    <td className="py-3 px-4 text-gray-600">{ranking.brand}</td>
+                    <td className="text-center py-3 px-4">
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">
+                        {ranking.overall_score.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="text-center py-3 px-4 text-gray-500">{ranking.comment_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="glass-card">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">各维度详细得分</h3>
@@ -349,20 +477,31 @@ const Report = () => {
                     <span className={`inline-flex items-center gap-2 ${index === 0 ? 'text-blue-600' : ''}`}>
                       {index === 0 && <span className="text-yellow-500">🏆</span>}
                       {ranking.brand}
+                      {specifiedBrands.length > 0 && !specifiedBrands.includes(ranking.brand) && (
+                        <span 
+                          className="text-blue-500 cursor-help" 
+                          title="此品牌由AI自动发现"
+                        >
+                          🔍
+                        </span>
+                      )}
                     </span>
                   </td>
-                  {reportData.dimensions.map(dim => (
-                    <td key={dim.name} className="text-center py-3 px-4">
-                      <span className={`
-                        px-2 py-1 rounded text-xs font-medium
-                        ${ranking.scores[dim.name] >= 8 ? 'bg-green-100 text-green-700' :
-                          ranking.scores[dim.name] >= 6 ? 'bg-blue-100 text-blue-700' :
-                          ranking.scores[dim.name] ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}
-                      `}>
-                        {ranking.scores[dim.name]?.toFixed(1) || '-'}
-                      </span>
-                    </td>
-                  ))}
+                  {reportData.dimensions.map(dim => {
+                    const score = ranking.scores?.[dim.name]
+                    return (
+                      <td key={dim.name} className="text-center py-3 px-4">
+                        <span className={`
+                          px-2 py-1 rounded text-xs font-medium
+                          ${score && score >= 8 ? 'bg-green-100 text-green-700' :
+                            score && score >= 6 ? 'bg-blue-100 text-blue-700' :
+                            score ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}
+                        `}>
+                          {score?.toFixed(1) || '-'}
+                        </span>
+                      </td>
+                    )
+                  })}
                   <td className="text-center py-3 px-4">
                     <span className="px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">
                       {ranking.overall_score.toFixed(1)}
@@ -422,10 +561,10 @@ const Report = () => {
       )}
 
       <div className="glass-card bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
-        <h3 className="text-lg font-bold text-gray-800 mb-2">购买建议</h3>
-        <p className="text-gray-600 leading-relaxed">
-          {reportData.recommendation}
-        </p>
+        <h3 className="text-lg font-bold text-gray-800 mb-4">💡 购买建议</h3>
+        <div className="prose prose-sm max-w-none text-gray-700">
+          <ReactMarkdown>{reportData.recommendation}</ReactMarkdown>
+        </div>
       </div>
     </div>
   )

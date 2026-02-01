@@ -10,18 +10,31 @@ import (
 )
 
 // ParseRequest 解析请求
-// 前端发送用户输入的商品类目
+// 前端发送用户输入的需求描述（自由格式）
 type ParseRequest struct {
-	Category string `json:"category" binding:"required"` // 商品类目，必填字段
+	Requirement string `json:"requirement" binding:"required"` // 用户需求描述，必填字段
+	// 为了向后兼容，同时支持旧的 category 字段
+	Category string `json:"category"` // 兼容旧版本，如果 requirement 为空则使用 category
 }
 
 // HandleParse 处理解析请求
-// 这个API接收用户输入的商品类目，调用AI进行解析，返回品牌、维度和关键词
+// 这个API接收用户输入的需求描述（自由格式），调用AI进行解析，返回品牌、维度和关键词
 func HandleParse(c *gin.Context) {
 	// 1. 解析请求参数
 	var req ParseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误: " + err.Error()})
+		return
+	}
+
+	// 向后兼容：如果 requirement 为空但 category 不为空，使用 category
+	if req.Requirement == "" && req.Category != "" {
+		req.Requirement = req.Category
+	}
+
+	// 验证至少有一个字段不为空
+	if req.Requirement == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误: requirement 或 category 字段不能为空"})
 		return
 	}
 
@@ -57,7 +70,7 @@ func HandleParse(c *gin.Context) {
 
 	// 5. 调用AI解析关键词
 	result, err := aiClient.ParseKeyword(c.Request.Context(), ai.ParseKeywordRequest{
-		Category: req.Category,
+		Requirement: req.Requirement,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI解析失败: " + err.Error()})

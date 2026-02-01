@@ -22,6 +22,7 @@ const Confirm = () => {
   
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<ParseResponse | null>(null)
+  const [videoDateRangeMonths, setVideoDateRangeMonths] = useState(0)
 
   useEffect(() => {
     if (!requirement) {
@@ -60,7 +61,8 @@ const Confirm = () => {
           requirement: requirement,
           brands: data.brands,
           dimensions: data.dimensions,
-          keywords: data.keywords
+          keywords: data.keywords,
+          video_date_range_months: videoDateRangeMonths
         })
       })
       const result = await response.json()
@@ -132,13 +134,34 @@ const Confirm = () => {
                 )}
             </div>
 
+            <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                <span>📅</span> 分析时间范围
+              </label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <select
+                  value={videoDateRangeMonths}
+                  onChange={(e) => setVideoDateRangeMonths(Number(e.target.value))}
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium min-w-[200px]"
+                >
+                  <option value={6}>最近 6 个月</option>
+                  <option value={12}>最近 1 年</option>
+                  <option value={24}>最近 2 年</option>
+                  <option value={0}>不限时间 (推荐)</option>
+                </select>
+                <p className="text-sm text-gray-500">
+                  只分析指定时间范围内发布的视频，确保评价的时效性
+                </p>
+              </div>
+            </div>
+
             {/* Brand Tags */}
             <div>
                 <h4 className="text-sm font-bold text-gray-600 mb-4 flex items-center gap-2">
                     <span>🏷️</span> 将分析这些品牌
                 </h4>
                 <div className="flex flex-wrap gap-3">
-                {data.brands.map(brand => (
+                {(data.brands || []).map(brand => (
                     <span key={brand} className="px-4 py-2 bg-white/50 backdrop-blur-sm rounded-xl text-sm font-medium text-slate-700 border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow cursor-default">
                     {brand}
                     </span>
@@ -152,7 +175,7 @@ const Confirm = () => {
                     <span>📊</span> 评价维度
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {data.dimensions.map(dim => (
+                {(data.dimensions || []).map(dim => (
                     <div key={dim.name} className="bg-white/40 backdrop-blur-sm rounded-xl p-4 border border-white/40 hover:bg-white/60 transition-colors">
                     <h5 className="font-bold text-slate-800 mb-1">{dim.name}</h5>
                     <p className="text-xs text-slate-500 leading-relaxed">{dim.description}</p>
@@ -167,7 +190,7 @@ const Confirm = () => {
                     <span>🔍</span> 搜索关键词
                 </h4>
                 <div className="bg-gray-50/50 rounded-lg p-3 text-sm text-slate-600 font-mono border border-gray-100">
-                    {data.keywords.join(' | ')}
+                    {(data.keywords || []).join(' | ')}
                 </div>
             </div>
         </div>

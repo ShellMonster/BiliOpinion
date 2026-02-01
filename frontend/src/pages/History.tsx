@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/common/Button'
+import ConfirmDialog from '../components/common/ConfirmDialog'
+import { useToast } from '../hooks/useToast'
 
 interface HistoryItem {
   id: number
+  taskId?: string
   category: string
   videoCount: number
   commentCount: number
@@ -17,6 +20,8 @@ export default function History() {
   const [histories, setHistories] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [deleteId, setDeleteId] = useState<number | null>(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     fetchHistories()
@@ -37,17 +42,24 @@ export default function History() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这条历史记录吗？')) return
+    setDeleteId(id)
+  }
+
+  const confirmDelete = async () => {
+    if (deleteId === null) return
 
     try {
-      const response = await fetch(`http://localhost:8080/api/history/${id}`, {
+      const response = await fetch(`http://localhost:8080/api/history/${deleteId}`, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Failed to delete history')
       
-      setHistories(histories.filter(h => h.id !== id))
+      setHistories(histories.filter(h => h.id !== deleteId))
+      showToast('删除成功', 'success')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed')
+      showToast(err instanceof Error ? err.message : 'Delete failed', 'error')
+    } finally {
+      setDeleteId(null)
     }
   }
 
@@ -118,6 +130,15 @@ export default function History() {
                 </div>
 
                 <div className="flex gap-2">
+                  {history.status === 'processing' && history.taskId && (
+                    <Button 
+                      variant="primary" 
+                      onClick={() => navigate(`/progress/${history.taskId}`)}
+                      className="text-sm px-4 py-2"
+                    >
+                      查看进度
+                    </Button>
+                  )}
                   {history.status === 'completed' && history.reportId > 0 && (
                     <Button 
                       variant="primary" 
@@ -140,6 +161,22 @@ export default function History() {
           ))}
         </div>
       )}
+      
+      <ConfirmDialog
+        isOpen={deleteId !== null}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title="删除确认"
+        message={
+          <div>
+            <p>确定要删除这条历史记录吗？</p>
+            <p className="text-red-500 text-sm mt-2">⚠️ 删除后不可恢复</p>
+          </div>
+        }
+        confirmText="删除"
+        cancelText="取消"
+        danger={true}
+      />
     </div>
   )
 }

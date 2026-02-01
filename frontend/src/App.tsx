@@ -5,7 +5,6 @@ import Confirm from './pages/Confirm'
 import Progress from './pages/Progress'
 import Report from './pages/Report'
 import History from './pages/History'
-import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -17,7 +16,6 @@ function App() {
           <Route path="/progress/:id" element={<Progress />} />
           <Route path="/report/:id" element={<Report />} />
           <Route path="/history" element={<History />} />
-          <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
     </BrowserRouter>

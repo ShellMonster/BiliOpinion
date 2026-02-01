@@ -16,6 +16,7 @@ type HistoryListResponse struct {
 	VideoCount   int    `json:"videoCount"`   // 视频数量
 	CommentCount int    `json:"commentCount"` // 评论数量
 	Status       string `json:"status"`       // 任务状态
+	ReportID     uint   `json:"reportId"`     // 关联的报告ID
 	CreatedAt    string `json:"createdAt"`    // 创建时间
 }
 
@@ -56,6 +57,7 @@ func HandleGetHistory(c *gin.Context) {
 			VideoCount:   h.VideoCount,
 			CommentCount: h.CommentCount,
 			Status:       h.Status,
+			ReportID:     h.ReportID,
 			CreatedAt:    h.CreatedAt.Format("2006-01-02 15:04:05"),
 		}
 	}

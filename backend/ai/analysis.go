@@ -260,3 +260,64 @@ func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []Co
 
 	return allResults, nil
 }
+
+// RecommendationInput AI生成购买建议的输入数据
+type RecommendationInput struct {
+	Category      string
+	Rankings      []BrandRankingInfo
+	BrandAnalysis map[string]BrandStrengthWeakness
+}
+
+// BrandRankingInfo 品牌排名信息（用于AI生成建议）
+type BrandRankingInfo struct {
+	Brand        string
+	OverallScore float64
+	Rank         int
+}
+
+// BrandStrengthWeakness 品牌优劣势（用于AI生成建议）
+type BrandStrengthWeakness struct {
+	Strengths  []string
+	Weaknesses []string
+}
+
+// GenerateRecommendation 使用AI生成专业的购买建议
+func (c *Client) GenerateRecommendation(ctx context.Context, input RecommendationInput) (string, error) {
+	if len(input.Rankings) == 0 {
+		return "暂无足够数据生成购买建议", nil
+	}
+
+	var rankingText string
+	for _, r := range input.Rankings {
+		analysis := input.BrandAnalysis[r.Brand]
+		rankingText += fmt.Sprintf("第%d名：%s（%.1f分）", r.Rank, r.Brand, r.OverallScore)
+		if len(analysis.Strengths) > 0 {
+			rankingText += fmt.Sprintf("，优势：%v", analysis.Strengths)
+		}
+		if len(analysis.Weaknesses) > 0 {
+			rankingText += fmt.Sprintf("，劣势：%v", analysis.Weaknesses)
+		}
+		rankingText += "\n"
+	}
+
+	systemPrompt := `你是一位专业的商品评测专家。请根据以下品牌评分和优劣势分析，生成一段200-300字的专业购买建议。
+要求：
+1. 客观分析各品牌的优缺点
+2. 针对不同用户需求给出具体建议
+3. 语言专业但易懂
+4. 不要使用markdown格式，直接输出纯文本`
+
+	userPrompt := fmt.Sprintf("商品类别：%s\n\n品牌排名及分析：\n%s\n请生成购买建议：", input.Category, rankingText)
+
+	messages := []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+
+	response, err := c.ChatCompletion(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("AI生成建议失败: %w", err)
+	}
+
+	return strings.TrimSpace(response), nil
+}

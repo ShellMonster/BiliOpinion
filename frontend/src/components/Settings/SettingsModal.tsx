@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import Modal from '../common/Modal'
 import Input from '../common/Input'
 import Button from '../common/Button'
+import Toast from '../common/Toast'
+import { useToast } from '../../hooks/useToast'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -16,6 +18,7 @@ interface SettingsData {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const { toast, showToast, hideToast } = useToast()
   const [settings, setSettings] = useState<SettingsData>({
     aiApiBase: 'https://api.openai.com/v1',
     aiApiKey: '',
@@ -53,8 +56,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       console.error('Failed to save to backend:', error)
     }
     
-    alert('设置已保存')
-    onClose()
+    showToast('设置已保存', 'success')
   }
 
   return (
@@ -112,6 +114,14 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       <Button onClick={handleSave} className="w-full">
         保存设置
       </Button>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={hideToast}
+        />
+      )}
     </Modal>
   )
 }

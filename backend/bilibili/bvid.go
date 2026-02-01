@@ -36,12 +36,17 @@ func swapString(s string, x, y int) string {
 //   - bvid: BV号字符串（如 "BV1mH4y1u7UA"）
 //
 // 返回：
-//   - avid: AV号（如 1054803170）
+//   - avid: AV号（如 1054803170），如果bvid无效则返回0
 //
 // 示例：
 //
 //	Bvid2Avid("BV1mH4y1u7UA") // 返回 1054803170
 func Bvid2Avid(bvid string) (avid int64) {
+	// 验证BVID格式：必须以"BV"开头且长度至少为12
+	if len(bvid) < 12 || !strings.HasPrefix(bvid, "BV") {
+		return 0
+	}
+
 	// 反向交换字符位置
 	s := swapString(swapString(bvid, 3, 9), 4, 7)
 	// 去除"BV1"前缀，保留后面的Base58编码部分
@@ -51,6 +56,9 @@ func Bvid2Avid(bvid string) (avid int64) {
 	temp := int64(0)
 	for _, c := range bv1 {
 		idx := strings.IndexRune(CHARTS, c)
+		if idx < 0 {
+			return 0 // 无效字符
+		}
 		temp = temp*PAUL_NUM + int64(idx)
 	}
 

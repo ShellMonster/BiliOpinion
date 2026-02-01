@@ -1,89 +1,167 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-// import { useSSE } from '../hooks/useSSE' // Commented out to use mock implementation for now
-// To demonstrate the UI without backend, I will use a local simulation that mimics the SSE structure
 
 interface Step {
   id: number
   label: string
-  status: 'pending' | 'processing' | 'completed'
+  status: 'pending' | 'processing' | 'completed' | 'error'
+}
+
+interface SSEData {
+  task_id: string
+  status: string
+  message?: string
+  error?: string
+  progress?: {
+    current: number
+    total: number
+    stage?: string
+  }
 }
 
 const Progress = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  // const { data } = useSSE(\`/api/progress/\${id}\`) // Real implementation
+  const eventSourceRef = useRef<EventSource | null>(null)
 
   const [progress, setProgress] = useState(0)
+  const [message, setMessage] = useState('正在连接服务器...')
+  const [error, setError] = useState<string | null>(null)
   const [steps, setSteps] = useState<Step[]>([
-    { id: 1, label: '抓取视频评论数据', status: 'pending' },
-    { id: 2, label: '清洗与预处理文本', status: 'pending' },
-    { id: 3, label: 'AI 情感与观点分析', status: 'pending' },
-    { id: 4, label: '生成多维度报表', status: 'pending' }
+    { id: 1, label: '搜索相关视频', status: 'pending' },
+    { id: 2, label: '抓取视频评论', status: 'pending' },
+    { id: 3, label: 'AI 分析评论内容', status: 'pending' },
+    { id: 4, label: '生成分析报告', status: 'pending' }
   ])
 
-  // Mock simulation of progress
   useEffect(() => {
-    let p = 0
-    let step = 0
-    
-    const interval = setInterval(() => {
-      p += Math.random() * 5
-      if (p > 100) p = 100
-      setProgress(p)
+    if (!id) return
 
-      // Update steps based on progress
-      if (p < 25) step = 0
-      else if (p < 50) step = 1
-      else if (p < 85) step = 2
-      else step = 3
-      
-      setSteps(prev => prev.map((s, i) => ({
-        ...s,
-        status: i < step ? 'completed' : i === step ? 'processing' : 'pending'
-      })))
+    const eventSource = new EventSource(`http://localhost:8080/api/sse?task_id=${id}`)
+    eventSourceRef.current = eventSource
 
-      if (p >= 100) {
-        clearInterval(interval)
-        setTimeout(() => {
-          navigate(`/report/${id}`)
-        }, 1000)
+    eventSource.onmessage = (event) => {
+      try {
+        const data: SSEData = JSON.parse(event.data)
+        
+        if (data.message) {
+          setMessage(data.message)
+        }
+
+        if (data.progress) {
+          setProgress(data.progress.current)
+        }
+
+        updateStepsFromStatus(data.status, data.progress?.current || 0)
+
+        if (data.status === 'completed') {
+          const reportId = data.progress?.stage
+          eventSource.close()
+          setTimeout(() => {
+            navigate(`/report/${reportId}`)
+          }, 1000)
+        }
+
+        if (data.status === 'error') {
+          setError(data.error || data.message || '任务执行失败')
+          eventSource.close()
+        }
+      } catch (e) {
+        console.error('Failed to parse SSE data:', e)
       }
-    }, 500)
+    }
 
-    return () => clearInterval(interval)
+    eventSource.onerror = () => {
+      setError('连接中断，请刷新页面重试')
+      eventSource.close()
+    }
+
+    return () => {
+      eventSource.close()
+    }
   }, [id, navigate])
+
+  const updateStepsFromStatus = (status: string, progressValue: number) => {
+    setSteps(prev => {
+      const newSteps = [...prev]
+      
+      if (status === 'searching' || progressValue < 20) {
+        newSteps[0].status = 'processing'
+      } else if (status === 'scraping' || (progressValue >= 20 && progressValue < 50)) {
+        newSteps[0].status = 'completed'
+        newSteps[1].status = 'processing'
+      } else if (status === 'analyzing' || (progressValue >= 50 && progressValue < 85)) {
+        newSteps[0].status = 'completed'
+        newSteps[1].status = 'completed'
+        newSteps[2].status = 'processing'
+      } else if (status === 'generating' || progressValue >= 85) {
+        newSteps[0].status = 'completed'
+        newSteps[1].status = 'completed'
+        newSteps[2].status = 'completed'
+        newSteps[3].status = 'processing'
+      }
+      
+      if (status === 'completed') {
+        return newSteps.map(s => ({ ...s, status: 'completed' as const }))
+      }
+      
+      if (status === 'error') {
+        return newSteps.map(s => 
+          s.status === 'processing' ? { ...s, status: 'error' as const } : s
+        )
+      }
+      
+      return newSteps
+    })
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <div className="glass-card text-center py-12">
+          <div className="text-6xl mb-6">❌</div>
+          <h2 className="text-2xl font-bold text-red-600 mb-4">任务执行失败</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="glass-card text-center py-12">
         <div className="mb-8">
           <div className="relative w-48 h-48 mx-auto mb-6 flex items-center justify-center">
-             {/* Circular Progress */}
-             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-               <circle cx="50" cy="50" r="45" fill="none" stroke="#eee" strokeWidth="8" />
-               <circle 
-                 cx="50" cy="50" r="45" fill="none" stroke="url(#gradient)" strokeWidth="8" 
-                 strokeDasharray="283"
-                 strokeDashoffset={283 - (283 * progress) / 100}
-                 className="transition-all duration-500 ease-out"
-                 strokeLinecap="round"
-               />
-               <defs>
-                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                   <stop offset="0%" stopColor="#3b82f6" />
-                   <stop offset="100%" stopColor="#8b5cf6" />
-                 </linearGradient>
-               </defs>
-             </svg>
-             <div className="absolute inset-0 flex flex-col items-center justify-center">
-               <span className="text-4xl font-bold text-gray-800">{Math.round(progress)}%</span>
-               <span className="text-sm text-gray-500 mt-1">处理中</span>
-             </div>
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="45" fill="none" stroke="#eee" strokeWidth="8" />
+              <circle 
+                cx="50" cy="50" r="45" fill="none" stroke="url(#gradient)" strokeWidth="8" 
+                strokeDasharray="283"
+                strokeDashoffset={283 - (283 * progress) / 100}
+                className="transition-all duration-500 ease-out"
+                strokeLinecap="round"
+              />
+              <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#3b82f6" />
+                  <stop offset="100%" stopColor="#8b5cf6" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-bold text-gray-800">{Math.round(progress)}%</span>
+              <span className="text-sm text-gray-500 mt-1">处理中</span>
+            </div>
           </div>
           
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">正在深入分析评论内容</h2>
-          <p className="text-gray-500">Task ID: {id}</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{message}</h2>
+          <p className="text-gray-500 text-sm">Task ID: {id}</p>
         </div>
 
         <div className="max-w-md mx-auto space-y-4 text-left">
@@ -93,12 +171,17 @@ const Progress = () => {
                 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors duration-300
                 ${step.status === 'completed' ? 'bg-green-500 text-white' : 
                   step.status === 'processing' ? 'bg-blue-500 text-white animate-pulse' : 
+                  step.status === 'error' ? 'bg-red-500 text-white' :
                   'bg-gray-200 text-gray-400'}
               `}>
-                {step.status === 'completed' ? '✓' : index + 1}
+                {step.status === 'completed' ? '✓' : 
+                 step.status === 'error' ? '!' : index + 1}
               </div>
               <div className="flex-1">
-                <div className={`font-medium ${step.status === 'pending' ? 'text-gray-400' : 'text-gray-800'}`}>
+                <div className={`font-medium ${
+                  step.status === 'pending' ? 'text-gray-400' : 
+                  step.status === 'error' ? 'text-red-600' : 'text-gray-800'
+                }`}>
                   {step.label}
                 </div>
               </div>

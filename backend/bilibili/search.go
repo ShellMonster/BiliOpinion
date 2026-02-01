@@ -108,7 +108,15 @@ func (c *Client) SearchVideos(req SearchVideosRequest) ([]VideoInfo, int, error)
 		return nil, 0, fmt.Errorf("API错误: %s (code: %d)", searchResp.Message, searchResp.Code)
 	}
 
-	return searchResp.Data.Result, searchResp.Data.NumResults, nil
+	// 过滤掉BVID为空的视频
+	var validVideos []VideoInfo
+	for _, v := range searchResp.Data.Result {
+		if v.BVID != "" {
+			validVideos = append(validVideos, v)
+		}
+	}
+
+	return validVideos, searchResp.Data.NumResults, nil
 }
 
 // SearchVideosWithLimit 搜索视频（带数量限制）

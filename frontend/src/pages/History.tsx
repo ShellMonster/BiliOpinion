@@ -8,6 +8,7 @@ interface HistoryItem {
   videoCount: number
   commentCount: number
   status: string
+  reportId: number
   createdAt: string
 }
 
@@ -50,8 +51,8 @@ export default function History() {
     }
   }
 
-  const handleView = (id: number) => {
-    navigate(`/report/${id}`)
+  const handleView = (reportId: number) => {
+    navigate(`/report/${reportId}`)
   }
 
   const getStatusBadge = (status: string) => {
@@ -117,10 +118,10 @@ export default function History() {
                 </div>
 
                 <div className="flex gap-2">
-                  {history.status === 'completed' && (
+                  {history.status === 'completed' && history.reportId > 0 && (
                     <Button 
                       variant="primary" 
-                      onClick={() => handleView(history.id)}
+                      onClick={() => handleView(history.reportId)}
                       className="text-sm px-4 py-2"
                     >
                       查看报告

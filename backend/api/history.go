@@ -3,6 +3,7 @@ package api
 import (
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/models"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -12,6 +13,7 @@ import (
 // HistoryListResponse 历史记录列表响应结构
 type HistoryListResponse struct {
 	ID           uint   `json:"id"`           // 历史记录ID
+	TaskId       string `json:"taskId"`       // 任务ID
 	Category     string `json:"category"`     // 商品类目
 	VideoCount   int    `json:"videoCount"`   // 视频数量
 	CommentCount int    `json:"commentCount"` // 评论数量
@@ -53,6 +55,7 @@ func HandleGetHistory(c *gin.Context) {
 	for i, h := range histories {
 		response[i] = HistoryListResponse{
 			ID:           h.ID,
+			TaskId:       h.TaskID,
 			Category:     h.Category,
 			VideoCount:   h.VideoCount,
 			CommentCount: h.CommentCount,
@@ -163,9 +166,9 @@ func parseJSONArray(jsonStr string) []string {
 		return []string{}
 	}
 
-	// 使用encoding/json解析JSON数组
 	var result []string
-	// 这里暂时返回空切片，前端会直接使用原始JSON字符串
-	// 如果需要后端解析，可以使用 json.Unmarshal([]byte(jsonStr), &result)
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return []string{}
+	}
 	return result
 }

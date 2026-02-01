@@ -23,6 +23,7 @@ const Confirm = () => {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<ParseResponse | null>(null)
   const [videoDateRangeMonths, setVideoDateRangeMonths] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!requirement) {
@@ -51,8 +52,9 @@ const Confirm = () => {
   }, [requirement])
 
   const handleConfirm = async () => {
-    if (!data || !requirement) return
-
+    if (!data || !requirement || submitting) return
+    
+    setSubmitting(true)
     try {
       const response = await fetch('http://localhost:8080/api/confirm', {
         method: 'POST',
@@ -69,6 +71,7 @@ const Confirm = () => {
       navigate(`/progress/${result.task_id}`)
     } catch (error) {
       console.error('Failed to confirm:', error)
+      setSubmitting(false)
     }
   }
 
@@ -198,9 +201,10 @@ const Confirm = () => {
         {/* Confirm Button */}
         <button
           onClick={handleConfirm}
+          disabled={submitting}
           className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
-          <span>✓</span> 确认开始分析
+          {submitting ? '⏳ 正在创建任务...' : '✓ 确认开始分析'}
         </button>
       </div>
     </div>

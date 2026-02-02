@@ -1,4 +1,4 @@
-import { ReportStats } from '../../../types/report'
+import type { ReportStats } from '../../../types/report'
 
 interface KeyStatsCardsProps {
   stats: ReportStats

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // normalizeModelKey 生成归一化的型号key用于比对
@@ -249,6 +250,9 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 	// 计算整体情感分布：仅按评分阈值划分，不做任何AI情感分析
 	sentimentDistribution := calculateSentiment(input.AnalysisResults)
 
+	// 提取关键词词频：用于词云（简单分词 + 停用词/单字过滤）
+	keywordFrequency := extractKeywords(input.AnalysisResults)
+
 	return &ReportData{
 		Category:              input.Category,
 		Brands:                allBrandNames,
@@ -263,6 +267,7 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 		BrandAnalysis:         brandAnalysis,
 		ModelRankings:         modelRankings,
 		VideoSources:          videoSources,
+		KeywordFrequency:      keywordFrequency,
 	}, nil
 }
 
@@ -588,4 +593,91 @@ func calculateSentiment(analysisResults map[string][]CommentWithScore) Sentiment
 	stats.NegativePct = math.Round((float64(negativeCount)/float64(total)*100)*10) / 10
 
 	return stats
+}
+
+// extractKeywords 从所有评论内容中提取关键词并做简单词频统计
+// 规则：
+//  1. 仅做“按空白/标点切分”的粗粒度分词（适配中英文混合）
+//  2. 过滤常见停用词（如“的、了、是、等”）
+//  3. 过滤单字词（避免词云被无意义的单字占满）
+//  4. 返回按出现次数降序的Top50
+func extractKeywords(analysisResults map[string][]CommentWithScore) []KeywordItem {
+	// 常见停用词：这里保持简单可控，避免误伤业务关键词
+	stopWords := map[string]struct{}{
+		"的": {}, "了": {}, "是": {}, "等": {}, "也": {}, "就": {}, "都": {}, "还": {}, "很": {},
+		"我": {}, "你": {}, "他": {}, "她": {}, "它": {}, "我们": {}, "你们": {}, "他们": {},
+		"这": {}, "那": {}, "这个": {}, "那个": {}, "一个": {}, "一些": {}, "不是": {}, "没有": {},
+		"在": {}, "和": {}, "与": {}, "及": {}, "而": {}, "且": {}, "或": {}, "或者": {},
+		"因为": {}, "所以": {}, "如果": {}, "但是": {}, "而且": {}, "以及": {},
+		"啊": {}, "呢": {}, "吗": {}, "吧": {}, "哦": {}, "呀": {}, "哈": {},
+	}
+
+	counts := make(map[string]int)
+
+	flushToken := func(buf *strings.Builder, tokens *[]string) {
+		if buf.Len() == 0 {
+			return
+		}
+		w := strings.TrimSpace(buf.String())
+		buf.Reset()
+		if w == "" {
+			return
+		}
+		*tokens = append(*tokens, w)
+	}
+
+	for _, results := range analysisResults {
+		for _, r := range results {
+			text := strings.TrimSpace(r.Content)
+			if text == "" {
+				continue
+			}
+
+			// 以“字母/数字/汉字”为token字符，其它（空格、标点等）视为分隔符
+			var buf strings.Builder
+			tokens := make([]string, 0, 32)
+			for _, ch := range text {
+				if unicode.IsLetter(ch) || unicode.IsDigit(ch) {
+					buf.WriteRune(ch)
+					continue
+				}
+				flushToken(&buf, &tokens)
+			}
+			flushToken(&buf, &tokens)
+
+			for _, raw := range tokens {
+				word := strings.ToLower(strings.TrimSpace(raw))
+				if word == "" {
+					continue
+				}
+				// 过滤单字词
+				if len([]rune(word)) <= 1 {
+					continue
+				}
+				// 过滤停用词
+				if _, ok := stopWords[word]; ok {
+					continue
+				}
+				counts[word]++
+			}
+		}
+	}
+
+	items := make([]KeywordItem, 0, len(counts))
+	for w, c := range counts {
+		items = append(items, KeywordItem{Word: w, Count: c})
+	}
+
+	// 稳定、可复现：次数降序；次数相同按词典序升序
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count == items[j].Count {
+			return items[i].Word < items[j].Word
+		}
+		return items[i].Count > items[j].Count
+	})
+
+	if len(items) > 50 {
+		items = items[:50]
+	}
+	return items
 }

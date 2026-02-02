@@ -110,7 +110,8 @@ const ReportHeader = ({
         XLSX.utils.book_append_sheet(wb, recWs, '购买建议')
       }
       
-      XLSX.writeFile(wb, `报告_${category}_${reportId}.xlsx`)
+      const dateStr = new Date().toISOString().split('T')[0]
+      XLSX.writeFile(wb, `报告_${category}_${reportId}_${dateStr}.xlsx`)
       showToast('Excel导出成功', 'success')
     } catch (error) {
       console.error('导出Excel失败:', error)

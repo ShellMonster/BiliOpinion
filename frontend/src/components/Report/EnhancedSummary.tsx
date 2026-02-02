@@ -18,7 +18,7 @@ interface EnhancedSummaryProps {
  */
 export const EnhancedSummary: React.FC<EnhancedSummaryProps> = (props) => {
   const recommendation = props.recommendation || props.data?.recommendation;
-  const rankings = props.rankings || props.data?.rankings;
+  const rankingsList = props.rankings || props.data?.rankings;
 
   if (!recommendation) {
     return null;
@@ -81,7 +81,7 @@ export const EnhancedSummary: React.FC<EnhancedSummaryProps> = (props) => {
             <h2 className="text-lg font-bold text-gray-900">AI 智能购买建议</h2>
             <p className="text-sm text-gray-500 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-amber-500" />
-              基于 {rankings?.length || 0} 个品牌分析生成的深度建议
+              基于 {rankingsList?.length || 0} 个品牌分析生成的深度建议
             </p>
           </div>
         </div>

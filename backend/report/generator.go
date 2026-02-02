@@ -6,6 +6,7 @@ import (
 	"bilibili-analyzer/backend/models"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -54,6 +55,13 @@ type VideoSource struct {
 	VideoReview int    `json:"video_review"` // 评论数
 }
 
+// KeywordItem 关键词词频项
+// Word为关键词文本，Count为出现次数
+type KeywordItem struct {
+	Word  string `json:"word"`
+	Count int    `json:"count"`
+}
+
 // ReportData 报告数据结构
 // 包含分析的完整结果，包括品牌、维度、得分、排名和购买建议
 type ReportData struct {
@@ -64,12 +72,14 @@ type ReportData struct {
 	Rankings       []BrandRanking                `json:"rankings"`       // 品牌排名列表
 	Recommendation string                        `json:"recommendation"` // 购买建议文本
 	// 新增字段
-	Stats         ReportStats                 `json:"stats"`          // 统计数据
-	TopComments   map[string][]TypicalComment `json:"top_comments"`   // 品牌 -> 好评列表
-	BadComments   map[string][]TypicalComment `json:"bad_comments"`   // 品牌 -> 差评列表
-	BrandAnalysis map[string]BrandAnalysis    `json:"brand_analysis"` // 品牌 -> 优劣势分析
-	ModelRankings []ModelRanking              `json:"model_rankings"` // 型号排名列表
-	VideoSources  []VideoSource               `json:"video_sources"`  // 视频来源列表
+	Stats                 ReportStats                 `json:"stats"`                  // 统计数据
+	SentimentDistribution SentimentStats              `json:"sentiment_distribution"` // 情感分布（基于评分阈值统计）
+	TopComments           map[string][]TypicalComment `json:"top_comments"`           // 品牌 -> 好评列表
+	BadComments           map[string][]TypicalComment `json:"bad_comments"`           // 品牌 -> 差评列表
+	BrandAnalysis         map[string]BrandAnalysis    `json:"brand_analysis"`         // 品牌 -> 优劣势分析
+	ModelRankings         []ModelRanking              `json:"model_rankings"`         // 型号排名列表
+	VideoSources          []VideoSource               `json:"video_sources"`          // 视频来源列表
+	KeywordFrequency      []KeywordItem               `json:"keyword_frequency"`      // 关键词词频（用于词云）
 }
 
 // BrandRanking 品牌排名信息
@@ -87,6 +97,17 @@ type ReportStats struct {
 	TotalVideos     int            `json:"total_videos"`      // 搜索到的视频总数
 	TotalComments   int            `json:"total_comments"`    // 抓取的评论总数
 	CommentsByBrand map[string]int `json:"comments_by_brand"` // 各品牌评论数
+}
+
+// SentimentStats 情感分布统计
+// 注意：这里不做任何AI情感分析，只按评分阈值划分好评/中性/差评
+type SentimentStats struct {
+	PositiveCount int     `json:"positive_count"`
+	NeutralCount  int     `json:"neutral_count"`
+	NegativeCount int     `json:"negative_count"`
+	PositivePct   float64 `json:"positive_pct"`
+	NeutralPct    float64 `json:"neutral_pct"`
+	NegativePct   float64 `json:"negative_pct"`
 }
 
 // TypicalComment 典型评论
@@ -225,19 +246,23 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 		}
 	}
 
+	// 计算整体情感分布：仅按评分阈值划分，不做任何AI情感分析
+	sentimentDistribution := calculateSentiment(input.AnalysisResults)
+
 	return &ReportData{
-		Category:       input.Category,
-		Brands:         allBrandNames,
-		Dimensions:     input.Dimensions,
-		Scores:         scores,
-		Rankings:       rankings,
-		Recommendation: recommendation,
-		Stats:          input.Stats,
-		TopComments:    topComments,
-		BadComments:    badComments,
-		BrandAnalysis:  brandAnalysis,
-		ModelRankings:  modelRankings,
-		VideoSources:   videoSources,
+		Category:              input.Category,
+		Brands:                allBrandNames,
+		Dimensions:            input.Dimensions,
+		Scores:                scores,
+		Rankings:              rankings,
+		Recommendation:        recommendation,
+		Stats:                 input.Stats,
+		SentimentDistribution: sentimentDistribution,
+		TopComments:           topComments,
+		BadComments:           badComments,
+		BrandAnalysis:         brandAnalysis,
+		ModelRankings:         modelRankings,
+		VideoSources:          videoSources,
 	}, nil
 }
 
@@ -522,4 +547,45 @@ func calculateAverageScore(scores map[string]*float64) float64 {
 		return 0
 	}
 	return total / float64(count)
+}
+
+// calculateSentiment 计算情感分布（仅基于评分阈值）
+// 规则：评分 >= 8 为好评；评分 5-8 为中性；评分 < 5 为差评
+// 注意：不做任何AI情感分析；当评论没有有效评分（平均分<=0）时跳过
+// 百分比保留1位小数
+func calculateSentiment(analysisResults map[string][]CommentWithScore) SentimentStats {
+	var positiveCount, neutralCount, negativeCount int
+	var total int
+
+	for _, results := range analysisResults {
+		for _, r := range results {
+			avgScore := calculateAverageScore(r.Scores)
+			if avgScore <= 0 {
+				continue
+			}
+			total++
+			if avgScore >= 8.0 {
+				positiveCount++
+			} else if avgScore >= 5.0 {
+				neutralCount++
+			} else {
+				negativeCount++
+			}
+		}
+	}
+
+	stats := SentimentStats{
+		PositiveCount: positiveCount,
+		NeutralCount:  neutralCount,
+		NegativeCount: negativeCount,
+	}
+	if total == 0 {
+		return stats
+	}
+
+	stats.PositivePct = math.Round((float64(positiveCount)/float64(total)*100)*10) / 10
+	stats.NeutralPct = math.Round((float64(neutralCount)/float64(total)*100)*10) / 10
+	stats.NegativePct = math.Round((float64(negativeCount)/float64(total)*100)*10) / 10
+
+	return stats
 }

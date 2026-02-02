@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import ReactMarkdown from 'react-markdown'
+import { useToast } from '../hooks/useToast'
 
 interface BrandRanking {
   brand: string
@@ -70,6 +71,7 @@ const Report = () => {
   const [report, setReport] = useState<ApiResponse | null>(null)
   const [exporting, setExporting] = useState(false)
   const [specifiedBrands, setSpecifiedBrands] = useState<string[]>([])
+  const { showToast } = useToast()
 
   const handleExportPDF = async () => {
     if (!id) return
@@ -89,7 +91,7 @@ const Report = () => {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (err) {
-      alert(err instanceof Error ? err.message : '导出PDF失败')
+      showToast(err instanceof Error ? err.message : '导出PDF失败', 'error')
     } finally {
       setExporting(false)
     }
@@ -263,7 +265,7 @@ const Report = () => {
     },
     yAxis: {
       type: 'category',
-      data: reportData.rankings.map(r => r.brand),
+      data: [...reportData.rankings].reverse().map(r => r.brand),
       axisLine: {
         show: false
       },
@@ -276,7 +278,7 @@ const Report = () => {
     },
     series: [{
       type: 'bar',
-      data: reportData.rankings.map((r, index) => ({
+      data: [...reportData.rankings].reverse().map((r, index) => ({
         value: Math.round(r.overall_score * 10) / 10,
         itemStyle: {
           color: colors[index % colors.length],
@@ -443,7 +445,7 @@ const Report = () => {
                     <td className="py-3 px-4 text-gray-600">{ranking.brand}</td>
                     <td className="text-center py-3 px-4">
                       <span className="px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">
-                        {ranking.overall_score.toFixed(2)}
+                        {ranking.overall_score.toFixed(1)}
                       </span>
                     </td>
                     <td className="text-center py-3 px-4 text-gray-500">{ranking.comment_count}</td>

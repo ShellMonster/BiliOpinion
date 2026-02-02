@@ -23,6 +23,8 @@ const Confirm = () => {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<ParseResponse | null>(null)
   const [videoDateRangeMonths, setVideoDateRangeMonths] = useState(0)
+  const [minVideoDuration, setMinVideoDuration] = useState(30)
+  const [maxComments, setMaxComments] = useState(500)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -64,7 +66,9 @@ const Confirm = () => {
           brands: data.brands,
           dimensions: data.dimensions,
           keywords: data.keywords,
-          video_date_range_months: videoDateRangeMonths
+          video_date_range_months: videoDateRangeMonths,
+          min_video_duration: minVideoDuration,
+          max_comments: maxComments
         })
       })
       const result = await response.json()
@@ -141,20 +145,52 @@ const Confirm = () => {
               <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                 <span>📅</span> 分析时间范围
               </label>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <select
-                  value={videoDateRangeMonths}
-                  onChange={(e) => setVideoDateRangeMonths(Number(e.target.value))}
-                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium min-w-[200px]"
-                >
-                  <option value={6}>最近 6 个月</option>
-                  <option value={12}>最近 1 年</option>
-                  <option value={24}>最近 2 年</option>
-                  <option value={0}>不限时间 (推荐)</option>
-                </select>
-                <p className="text-sm text-gray-500">
-                  只分析指定时间范围内发布的视频，确保评价的时效性
-                </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 视频发布时间选项 */}
+                <div>
+                  <select
+                    value={videoDateRangeMonths}
+                    onChange={(e) => setVideoDateRangeMonths(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={6}>最近 6 个月</option>
+                    <option value={12}>最近 1 年</option>
+                    <option value={24}>最近 2 年</option>
+                    <option value={0}>不限时间 (推荐)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">视频发布时间</p>
+                </div>
+                {/* 视频时长过滤选项 */}
+                <div>
+                  <select
+                    value={minVideoDuration}
+                    onChange={(e) => setMinVideoDuration(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={0}>不限制</option>
+                    <option value={30}>至少 30 秒 (推荐)</option>
+                    <option value={60}>至少 1 分钟</option>
+                    <option value={120}>至少 2 分钟</option>
+                    <option value={180}>至少 3 分钟</option>
+                    <option value={300}>至少 5 分钟</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">过滤短视频</p>
+                </div>
+                {/* 评论数量限制选项 */}
+                <div>
+                  <select
+                    value={maxComments}
+                    onChange={(e) => setMaxComments(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={100}>限制 100 条</option>
+                    <option value={200}>限制 200 条</option>
+                    <option value={500}>限制 500 条 (推荐)</option>
+                    <option value={1000}>限制 1000 条</option>
+                    <option value={2000}>限制 2000 条</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">分析评论数量</p>
+                </div>
               </div>
             </div>
 

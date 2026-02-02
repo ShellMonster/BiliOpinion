@@ -81,6 +81,7 @@ export interface ReportData {
   brand_analysis?: Record<string, BrandAnalysis>
   sentiment_distribution?: Record<string, SentimentStats>
   video_sources?: VideoSource[]
+  keywords?: KeywordItem[]
 }
 
 // API 响应结构

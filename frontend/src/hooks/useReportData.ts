@@ -46,6 +46,20 @@ export interface VideoSource {
   video_review: number
 }
 
+export interface KeywordItem {
+  word: string
+  count: number
+}
+
+export interface SentimentStats {
+  positive_count: number
+  neutral_count: number
+  negative_count: number
+  positive_pct: number
+  neutral_pct: number
+  negative_pct: number
+}
+
 export interface ReportData {
   category: string
   brands: string[]
@@ -58,7 +72,9 @@ export interface ReportData {
   top_comments?: Record<string, TypicalComment[]>
   bad_comments?: Record<string, TypicalComment[]>
   brand_analysis?: Record<string, BrandAnalysis>
+  sentiment_distribution?: Record<string, SentimentStats>
   video_sources?: VideoSource[]
+  keywords?: KeywordItem[]
 }
 
 export interface ApiResponse {

@@ -59,6 +59,12 @@
 
 ---
 
+## Status: ✅ COMPLETED (2026-02-01)
+
+All tasks have been completed. This plan is now archived.
+
+---
+
 ## TODOs
 
 - [x] 1. 创建 Modal 通用组件
@@ -283,9 +289,9 @@ cd frontend && npm run dev
 ```
 
 ### Final Checklist
-- [ ] 点击导航栏"设置"弹出弹窗
-- [ ] 弹窗显示 AI 配置和 B站 Cookie 配置
-- [ ] 保存功能正常工作
-- [ ] 点击背景或关闭按钮可关闭弹窗
-- [ ] /settings 路由已移除
-- [ ] 前端编译无错误
+- [x] 点击导航栏"设置"弹出弹窗
+- [x] 弹窗显示 AI 配置和 B站 Cookie 配置
+- [x] 保存功能正常工作
+- [x] 点击背景或关闭按钮可关闭弹窗
+- [x] /settings 路由已移除
+- [x] 前端编译无错误

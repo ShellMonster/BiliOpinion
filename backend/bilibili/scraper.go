@@ -3,6 +3,7 @@ package bilibili
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -101,8 +102,12 @@ func (s *Scraper) SetProgressCallback(callback ProgressCallback) {
 
 // reportProgress 报告进度
 func (s *Scraper) reportProgress(stage string, current, total int, message string) {
+	// 添加调试日志，确认进度回调被调用
+	log.Printf("[Scraper] Progress: stage=%s, current=%d, total=%d, message=%s", stage, current, total, message)
 	if s.callback != nil {
 		s.callback(stage, current, total, message)
+	} else {
+		log.Printf("[Scraper] WARNING: No callback set, progress not pushed to SSE")
 	}
 }
 
@@ -130,7 +135,7 @@ func (s *Scraper) ScrapeByKeyword(ctx context.Context, keyword string) (*ScrapeR
 	// 阶段1：搜索视频
 	s.reportProgress("searching", 0, s.config.MaxVideos, "正在搜索视频...")
 
-	videos, err := s.client.SearchVideosWithLimit(keyword, s.config.MaxVideos)
+	videos, err := s.client.SearchVideosWithLimit(keyword, s.config.MaxVideos, 0)
 	if err != nil {
 		return nil, fmt.Errorf("搜索视频失败: %w", err)
 	}
@@ -150,6 +155,7 @@ func (s *Scraper) ScrapeByKeyword(ctx context.Context, keyword string) (*ScrapeR
 	s.reportProgress("scraping", 0, len(videos), "开始抓取评论...")
 
 	// 使用semaphore控制并发
+	log.Printf("[Scraper] MaxConcurrency: %d", s.config.MaxConcurrency)
 	sem := semaphore.NewWeighted(s.config.MaxConcurrency)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -164,6 +170,7 @@ func (s *Scraper) ScrapeByKeyword(ctx context.Context, keyword string) (*ScrapeR
 		}
 
 		// 获取信号量
+		log.Printf("[Scraper] Acquiring semaphore for video: %s", video.BVID)
 		if err := sem.Acquire(ctx, 1); err != nil {
 			return nil, err
 		}
@@ -300,29 +307,51 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 		result.Stats.TotalVideos = len(videos)
 	}
 
+	log.Printf("[Scraper] Starting ScrapeByVideos with %d videos", len(videos))
 	s.reportProgress("scraping", 0, len(videos), "开始抓取评论...")
 
 	// 使用semaphore控制并发
+	log.Printf("[Scraper] MaxConcurrency: %d", s.config.MaxConcurrency)
 	sem := semaphore.NewWeighted(s.config.MaxConcurrency)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var completedCount int
+	var startedCount int
 
-	for _, video := range videos {
+	for i, video := range videos {
+		log.Printf("[Scraper] Loop iteration %d, video: %s", i, video.BVID)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 		}
 
+		log.Printf("[Scraper] Acquiring semaphore for video: %s", video.BVID)
 		if err := sem.Acquire(ctx, 1); err != nil {
 			return nil, err
 		}
 
 		wg.Add(1)
 		go func(v VideoInfo) {
+			log.Printf("[Scraper] Goroutine started for video: %s", v.BVID)
 			defer wg.Done()
 			defer sem.Release(1)
+
+			// 开始抓取时推送进度，让用户知道当前正在处理哪个视频
+			mu.Lock()
+			startedCount++
+			currentStarted := startedCount
+			mu.Unlock()
+
+			// 截断视频标题（最多20个字符），避免进度消息过长
+			title := v.Title
+			if len([]rune(title)) > 20 {
+				title = string([]rune(title)[:20]) + "..."
+			}
+
+			log.Printf("[Scraper] Starting video %d/%d: %s (BVID: %s)", currentStarted, len(videos), title, v.BVID)
+			s.reportProgress("scraping", currentStarted, len(videos),
+				fmt.Sprintf("正在抓取 (%d/%d): %s", currentStarted, len(videos), title))
 
 			comments, err := s.scrapeVideoComments(ctx, v.BVID)
 
@@ -334,6 +363,10 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 			if err != nil {
 				result.Stats.Errors = append(result.Stats.Errors,
 					fmt.Sprintf("视频%s抓取失败: %v", v.BVID, err))
+				// 失败时也推送进度，让用户知道进度在继续
+				log.Printf("[Scraper] Failed video %d/%d: %s, error: %v", completedCount, len(videos), v.BVID, err)
+				s.reportProgress("scraping", completedCount, len(videos),
+					fmt.Sprintf("已完成 %d/%d (失败: %s)", completedCount, len(videos), v.BVID))
 				return
 			}
 
@@ -347,8 +380,10 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 			result.Stats.TotalComments += commentCount
 			result.Stats.TotalReplies += replyCount
 
+			// 完成时推送进度，显示累计评论数
+			log.Printf("[Scraper] Completed video %d/%d: %s, got %d comments", completedCount, len(videos), v.BVID, commentCount)
 			s.reportProgress("scraping", completedCount, len(videos),
-				fmt.Sprintf("已完成%d/%d", completedCount, len(videos)))
+				fmt.Sprintf("已完成 %d/%d，共%d条评论", completedCount, len(videos), result.Stats.TotalComments))
 		}(video)
 
 		time.Sleep(s.config.RequestDelay)
@@ -357,6 +392,8 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 	wg.Wait()
 
 	result.Stats.Duration = time.Since(startTime)
+	log.Printf("[Scraper] ScrapeByVideos completed: %d videos, %d comments, duration: %v",
+		result.Stats.TotalVideos, result.Stats.TotalComments, result.Stats.Duration)
 	return result, nil
 }
 

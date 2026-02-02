@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,12 +17,15 @@ import (
 type AnalyzeCommentRequest struct {
 	Comment    string      // 评论内容
 	Dimensions []Dimension // 评价维度列表
+	VideoTitle string      // 视频标题，作为上下文
 }
 
 // AnalyzeCommentResponse 分析评论响应
 // 包含各维度的得分结果
 type AnalyzeCommentResponse struct {
 	Scores map[string]*float64 `json:"scores"` // 维度名 -> 得分(1-10)，nil表示未提及
+	Brand  string              `json:"brand"`  // 提取的品牌名称
+	Model  string              `json:"model"`  // 提取的具体型号
 }
 
 // CommentAnalysisResult 评论分析结果（包含原始评论信息）
@@ -30,6 +34,8 @@ type CommentAnalysisResult struct {
 	CommentID string              `json:"comment_id"` // 评论ID
 	Content   string              `json:"content"`    // 评论内容
 	Scores    map[string]*float64 `json:"scores"`     // 各维度得分
+	Brand     string              `json:"brand"`      // AI提取的品牌
+	Model     string              `json:"model"`      // AI提取的型号
 	Error     string              `json:"error"`      // 分析错误信息（如有）
 }
 
@@ -59,10 +65,23 @@ func (c *Client) AnalyzeComment(ctx context.Context, req AnalyzeCommentRequest) 
 		dimList = append(dimList, fmt.Sprintf("- %s：%s", dim.Name, dim.Description))
 	}
 
-	// 构建系统提示词（System Prompt）
-	// 指导AI如何分析评论并返回结构化的JSON结果
-	systemPrompt := fmt.Sprintf(`你是一个专业的商品评论分析助手。你的任务是根据用户评论内容，对以下维度进行打分（1-10分）：
+	systemPrompt := fmt.Sprintf(`你是一个专业的商品评论分析助手。你的任务是：
 
+1. 从视频标题和评论内容中识别：
+   - 品牌名称（如"戴森"、"小米"、"苹果"、"Sony"）
+   - 具体型号（如"V12"、"iPhone 15 Pro"、"G10"、"WH-1000XM5"）
+
+重要：型号提取规则：
+- 优先从评论内容中提取具体型号（评论比标题更准确）
+- 常见型号格式：
+  * 字母+数字组合（V12, G10, S23, XM5）
+  * 品牌+型号（iPhone 15, Galaxy S23, Watch GT3）
+  * 系列+后缀（Pro, Max, Plus, Ultra, Lite）
+- 如果评论提到多个型号，选择评论主要讨论的那个
+- 如果无法确定具体型号但能确定系列，填写系列名（如"V系列"、"Pro系列"）
+- 注意区分型号和代数（"第二代"不是型号，"V2"才是）
+
+2. 对以下维度进行打分（1-10分）：
 %s
 
 评分标准：
@@ -72,15 +91,23 @@ func (c *Client) AnalyzeComment(ctx context.Context, req AnalyzeCommentRequest) 
 - 8-10分：优秀/强烈好评
 
 重要规则：
-1. 只根据评论中明确提及的内容打分
-2. 如果评论完全未提及某个维度，该维度返回null
-3. 必须严格返回JSON格式，不要添加任何其他文字
+1. 优先从视频标题提取品牌和型号
+2. 如果评论中提到了具体型号，以评论为准
+3. 如果无法确定型号，model字段填"通用"
+4. 如果无法确定品牌，brand字段填"未知"
+5. 只根据评论中明确提及的内容打分
+6. 如果评论完全未提及某个维度，该维度返回null
+7. 必须严格返回JSON格式，不要添加任何其他文字
 
-返回格式示例：
-{"scores":{"维度1":8.5,"维度2":null,"维度3":7.0}}`, strings.Join(dimList, "\n"))
+返回JSON格式：
+{"brand":"品牌名","model":"型号名","scores":{"维度1":8.5,"维度2":null}}`, strings.Join(dimList, "\n"))
 
-	// 构建用户提示词
-	userPrompt := fmt.Sprintf("请分析以下评论：\n\n%s", req.Comment)
+	var userPrompt string
+	if req.VideoTitle != "" {
+		userPrompt = fmt.Sprintf("视频标题：%s\n\n评论内容：%s", req.VideoTitle, req.Comment)
+	} else {
+		userPrompt = fmt.Sprintf("评论内容：%s", req.Comment)
+	}
 
 	// 构建消息列表
 	messages := []Message{
@@ -156,30 +183,28 @@ func (c *Client) AnalyzeCommentsBatch(ctx context.Context, comments []CommentInp
 	for i, comment := range comments {
 		wg.Add(1)
 
-		// 启动goroutine处理单条评论
 		go func(index int, input CommentInput) {
 			defer wg.Done()
 
-			// 初始化结果
 			results[index] = CommentAnalysisResult{
 				CommentID: input.ID,
 				Content:   input.Content,
 			}
 
-			// 调用单条评论分析
 			resp, err := c.AnalyzeComment(ctx, AnalyzeCommentRequest{
 				Comment:    input.Content,
 				Dimensions: dimensions,
+				VideoTitle: input.VideoTitle,
 			})
 
 			if err != nil {
-				// 记录错误但不中断其他评论的分析
 				results[index].Error = err.Error()
 				return
 			}
 
-			// 保存分析结果
 			results[index].Scores = resp.Scores
+			results[index].Brand = resp.Brand
+			results[index].Model = resp.Model
 		}(i, comment)
 	}
 
@@ -205,56 +230,57 @@ func (c *Client) AnalyzeCommentsBatch(ctx context.Context, comments []CommentInp
 // CommentInput 评论输入
 // 用于批量分析时传入评论信息
 type CommentInput struct {
-	ID      string // 评论ID
-	Content string // 评论内容
+	ID         string // 评论ID
+	Content    string // 评论内容
+	VideoTitle string // 视频标题，作为上下文
+	VideoBVID  string // 视频BVID
 }
 
-// AnalyzeCommentsWithRateLimit 带速率限制的批量分析
-// 控制并发数量，避免API限流
+// AnalyzeCommentsWithRateLimit 带速率限制的批量分析（优化版）
+// 使用批量合并策略，大幅减少 API 调用次数
 // 参数：
 //   - ctx: 上下文
 //   - comments: 评论列表
 //   - dimensions: 评价维度
-//   - batchSize: 每批处理的评论数量
+//   - batchSize: 每批处理的评论数量（已废弃，使用动态批次计算）
 //
 // 返回：
 //   - []CommentAnalysisResult: 分析结果
 //   - error: 错误信息
 func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []CommentInput, dimensions []Dimension, batchSize int) ([]CommentAnalysisResult, error) {
-	// 设置默认批次大小
-	if batchSize <= 0 {
-		batchSize = 5
+	// 使用动态批次计算
+	config := DefaultBatchConfig()
+	if batchSize > 0 && batchSize < config.MaxItemsPerBatch {
+		config.MaxItemsPerBatch = batchSize
 	}
+
+	batches := CalculateBatches(comments, &config)
+	log.Printf("[AI] 评论分析：共 %d 条评论，分为 %d 批处理", len(comments), len(batches))
 
 	var allResults []CommentAnalysisResult
 
-	// 分批处理评论
-	for i := 0; i < len(comments); i += batchSize {
-		// 计算当前批次的结束索引
-		end := i + batchSize
-		if end > len(comments) {
-			end = len(comments)
-		}
-
-		// 获取当前批次的评论
-		batch := comments[i:end]
+	for i, batch := range batches {
+		log.Printf("[AI] 正在分析第 %d/%d 批（%d 条评论）...", i+1, len(batches), len(batch))
 
 		// 分析当前批次
-		results, err := c.AnalyzeCommentsBatch(ctx, batch, dimensions)
+		results, err := c.AnalyzeCommentsBatchMerged(ctx, batch, dimensions)
+
 		if err != nil {
-			// 记录错误但继续处理下一批
-			// 部分失败不影响整体流程
-			for _, comment := range batch {
-				allResults = append(allResults, CommentAnalysisResult{
-					CommentID: comment.ID,
-					Content:   comment.Content,
-					Error:     err.Error(),
-				})
+			// 降级：使用原有的并发单条分析
+			results, err = c.AnalyzeCommentsBatch(ctx, batch, dimensions)
+			if err != nil {
+				// 如果单条分析也失败，记录错误但继续
+				for _, comment := range batch {
+					allResults = append(allResults, CommentAnalysisResult{
+						CommentID: comment.ID,
+						Content:   comment.Content,
+						Error:     err.Error(),
+					})
+				}
+				continue
 			}
-			continue
 		}
 
-		// 添加到总结果
 		allResults = append(allResults, results...)
 	}
 
@@ -266,6 +292,7 @@ type RecommendationInput struct {
 	Category      string
 	Rankings      []BrandRankingInfo
 	BrandAnalysis map[string]BrandStrengthWeakness
+	ModelRankings []ModelRankingInfo
 }
 
 // BrandRankingInfo 品牌排名信息（用于AI生成建议）
@@ -273,6 +300,15 @@ type BrandRankingInfo struct {
 	Brand        string
 	OverallScore float64
 	Rank         int
+}
+
+// ModelRankingInfo 型号排名信息（用于AI生成建议）
+type ModelRankingInfo struct {
+	Model        string
+	Brand        string
+	OverallScore float64
+	Rank         int
+	CommentCount int
 }
 
 // BrandStrengthWeakness 品牌优劣势（用于AI生成建议）
@@ -305,9 +341,23 @@ func (c *Client) GenerateRecommendation(ctx context.Context, input Recommendatio
 1. 客观分析各品牌的优缺点
 2. 针对不同用户需求给出具体建议
 3. 语言专业但易懂
-4. 不要使用markdown格式，直接输出纯文本`
+4. 使用Markdown格式输出，包括：
+   - 使用 ## 作为小标题
+   - 使用 **加粗** 强调重点
+   - 使用 - 列表展示要点
+   - 使用 > 引用块突出关键建议`
 
-	userPrompt := fmt.Sprintf("商品类别：%s\n\n品牌排名及分析：\n%s\n请生成购买建议：", input.Category, rankingText)
+	var modelText string
+	if len(input.ModelRankings) > 0 {
+		modelText = "\n\n型号排名：\n"
+		for _, m := range input.ModelRankings {
+			modelText += fmt.Sprintf("第%d名：%s %s（%.1f分，%d条评论）\n",
+				m.Rank, m.Brand, m.Model, m.OverallScore, m.CommentCount)
+		}
+	}
+
+	userPrompt := fmt.Sprintf("商品类别：%s\n\n品牌排名及分析：\n%s%s\n请生成购买建议：",
+		input.Category, rankingText, modelText)
 
 	messages := []Message{
 		{Role: "system", Content: systemPrompt},
@@ -320,4 +370,114 @@ func (c *Client) GenerateRecommendation(ctx context.Context, input Recommendatio
 	}
 
 	return strings.TrimSpace(response), nil
+}
+
+// BatchAnalysisResult 批量分析结果（用于 JSON 解析）
+type BatchAnalysisResult struct {
+	Results []struct {
+		ID     string              `json:"id"`
+		Brand  string              `json:"brand"`
+		Model  string              `json:"model"`
+		Scores map[string]*float64 `json:"scores"`
+	} `json:"results"`
+}
+
+// AnalyzeCommentsBatchMerged 真正的批量分析（多条评论合并到一个请求）
+// 将多条评论合并到一个 API 请求中，大幅减少请求次数
+func (c *Client) AnalyzeCommentsBatchMerged(ctx context.Context, comments []CommentInput, dimensions []Dimension) ([]CommentAnalysisResult, error) {
+	if len(comments) == 0 {
+		return nil, fmt.Errorf("评论列表不能为空")
+	}
+	if len(dimensions) == 0 {
+		return nil, fmt.Errorf("评价维度不能为空")
+	}
+
+	// 构建维度列表
+	var dimList []string
+	for _, dim := range dimensions {
+		dimList = append(dimList, fmt.Sprintf("- %s：%s", dim.Name, dim.Description))
+	}
+
+	// 构建评论列表文本
+	var commentList []string
+	for i, c := range comments {
+		if c.VideoTitle != "" {
+			commentList = append(commentList, fmt.Sprintf("[%d] 视频：%s | 内容：%s", i+1, c.VideoTitle, c.Content))
+		} else {
+			commentList = append(commentList, fmt.Sprintf("[%d] 内容：%s", i+1, c.Content))
+		}
+	}
+
+	systemPrompt := fmt.Sprintf(`你是商品评论分析助手。分析以下多条评论，为每条评论：
+1. 提取品牌名称和具体型号
+2. 对以下维度打分（1-10分，未提及则为null）：
+%s
+
+评分标准：1-3差评，4-5一般，6-7较好，8-10优秀
+
+重要规则：
+- 每条评论独立分析，用评论编号[1][2]等标识
+- 无法确定品牌填"未知"，无法确定型号填"通用"
+- 必须返回JSON格式，不要添加任何其他文字
+- results数组的顺序必须与输入评论顺序一致
+
+返回格式：
+{"results":[{"id":"1","brand":"品牌","model":"型号","scores":{"维度1":8.5,"维度2":null}},{"id":"2",...}]}`, strings.Join(dimList, "\n"))
+
+	userPrompt := fmt.Sprintf("评论列表（共%d条）：\n%s", len(comments), strings.Join(commentList, "\n"))
+
+	messages := []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+
+	response, err := c.ChatCompletion(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("AI请求失败: %w", err)
+	}
+
+	// 清理响应（移除可能的 markdown 代码块）
+	cleanedResponse := cleanJSONResponse(response)
+
+	// 解析批量结果
+	var batchResult BatchAnalysisResult
+	if err := json.Unmarshal([]byte(cleanedResponse), &batchResult); err != nil {
+		// 尝试提取 JSON
+		jsonPattern := regexp.MustCompile(`\{[\s\S]*"results"[\s\S]*\}`)
+		match := jsonPattern.FindString(response)
+		if match != "" {
+			if err := json.Unmarshal([]byte(match), &batchResult); err != nil {
+				return nil, fmt.Errorf("解析批量响应失败: %w, 原始响应: %s", err, response[:min(len(response), 500)])
+			}
+		} else {
+			return nil, fmt.Errorf("无法从响应中提取JSON: %s", response[:min(len(response), 500)])
+		}
+	}
+
+	// 转换为 CommentAnalysisResult 格式
+	results := make([]CommentAnalysisResult, len(comments))
+	for i, c := range comments {
+		results[i] = CommentAnalysisResult{
+			CommentID: c.ID,
+			Content:   c.Content,
+		}
+
+		// 查找对应的分析结果
+		for _, r := range batchResult.Results {
+			// 支持 "1" 或 "comment_0" 格式的 ID
+			if r.ID == fmt.Sprintf("%d", i+1) || r.ID == c.ID {
+				results[i].Brand = r.Brand
+				results[i].Model = r.Model
+				results[i].Scores = r.Scores
+				break
+			}
+		}
+
+		// 如果没找到对应结果，标记错误
+		if results[i].Scores == nil {
+			results[i].Error = "未在批量响应中找到对应结果"
+		}
+	}
+
+	return results, nil
 }

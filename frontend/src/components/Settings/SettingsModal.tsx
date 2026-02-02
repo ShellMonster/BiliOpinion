@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import Modal from '../common/Modal'
 import Input from '../common/Input'
 import Button from '../common/Button'
-import Toast from '../common/Toast'
 import { useToast } from '../../hooks/useToast'
 
 interface SettingsModalProps {
@@ -18,7 +17,7 @@ interface SettingsData {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { toast, showToast, hideToast } = useToast()
+  const { showToast } = useToast()
   const [settings, setSettings] = useState<SettingsData>({
     aiApiBase: 'https://api.openai.com/v1',
     aiApiKey: '',
@@ -114,14 +113,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       <Button onClick={handleSave} className="w-full">
         保存设置
       </Button>
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={hideToast}
-        />
-      )}
     </Modal>
   )
 }

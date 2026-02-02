@@ -5,20 +5,26 @@ import Confirm from './pages/Confirm'
 import Progress from './pages/Progress'
 import Report from './pages/Report'
 import History from './pages/History'
+import { ToastProvider } from './hooks/useToast'
+import ErrorBoundary from './components/common/ErrorBoundary'
 
 function App() {
   return (
-    <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/confirm" element={<Confirm />} />
-          <Route path="/progress/:id" element={<Progress />} />
-          <Route path="/report/:id" element={<Report />} />
-          <Route path="/history" element={<History />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <ToastProvider>
+        <BrowserRouter>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/confirm" element={<Confirm />} />
+              <Route path="/progress/:id" element={<Progress />} />
+              <Route path="/report/:id" element={<Report />} />
+              <Route path="/history" element={<History />} />
+            </Routes>
+          </Layout>
+        </BrowserRouter>
+      </ToastProvider>
+    </ErrorBoundary>
   )
 }
 

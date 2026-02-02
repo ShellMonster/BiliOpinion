@@ -19,6 +19,13 @@ type AnalysisHistory struct {
 	ReportID     uint      `gorm:"index"`                   // 关联的报告ID（外键引用reports表）
 	CreatedAt    time.Time `gorm:"index"`                   // 创建时间（用于时间范围查询）
 	UpdatedAt    time.Time // 更新时间
+
+	// 任务执行状态（用于持久化和恢复）
+	Stage         string    `gorm:"size:20"`   // 当前阶段：searching/scraping/analyzing/generating
+	Progress      int       `gorm:"default:0"` // 当前进度百分比 (0-100)
+	ProgressMsg   string    `gorm:"size:200"`  // 进度消息
+	TaskConfig    string    `gorm:"type:text"` // 任务配置 JSON（用于恢复）
+	LastHeartbeat time.Time `gorm:"index"`     // 最后心跳时间（用于超时检测）
 }
 
 // 任务状态常量

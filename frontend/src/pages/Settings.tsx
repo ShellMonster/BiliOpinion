@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Input from '../components/common/Input'
 import Button from '../components/common/Button'
+import { useToast } from '../hooks/useToast'
 
 interface SettingsData {
   aiApiBase: string
@@ -16,6 +17,7 @@ export default function Settings() {
     aiModel: 'gpt-3.5-turbo',
     bilibiliCookie: ''
   })
+  const { showToast } = useToast()
 
   // 从localStorage加载设置
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function Settings() {
   // 保存设置
   const handleSave = () => {
     localStorage.setItem('settings', JSON.stringify(settings))
-    alert('设置已保存')
+    showToast('设置已保存', 'success')
   }
 
   return (

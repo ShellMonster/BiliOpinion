@@ -35,12 +35,22 @@ const Progress = () => {
   ])
 
   useEffect(() => {
-    if (!id) return
+    console.log('[Progress] Component mounted, task_id:', id)
+    if (!id) {
+      console.error('[Progress] No task_id provided')
+      setError('缺少任务ID')
+      return
+    }
 
     const eventSource = new EventSource(`http://localhost:8080/api/sse?task_id=${id}`)
     eventSourceRef.current = eventSource
 
+    eventSource.onopen = () => {
+      console.log('[Progress] SSE connection opened')
+    }
+
     eventSource.onmessage = (event) => {
+      console.log('[Progress] SSE data received:', event.data)
       try {
         const data: SSEData = JSON.parse(event.data)
         
@@ -56,6 +66,7 @@ const Progress = () => {
 
         if (data.status === 'completed') {
           const reportId = data.progress?.stage
+          console.log('[Progress] Task completed, reportId:', reportId)
           eventSource.close()
           setTimeout(() => {
             navigate(`/report/${reportId}`)
@@ -63,20 +74,23 @@ const Progress = () => {
         }
 
         if (data.status === 'error') {
+          console.error('[Progress] Task error:', data.error || data.message)
           setError(data.error || data.message || '任务执行失败')
           eventSource.close()
         }
       } catch (e) {
-        console.error('Failed to parse SSE data:', e)
+        console.error('[Progress] Failed to parse SSE data:', e, event.data)
       }
     }
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (err) => {
+      console.error('[Progress] SSE connection error:', err)
       setError('连接中断，请刷新页面重试')
       eventSource.close()
     }
 
     return () => {
+      console.log('[Progress] Cleaning up SSE connection')
       eventSource.close()
     }
   }, [id, navigate])

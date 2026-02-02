@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // ParseKeywordRequest 解析关键词请求
@@ -32,6 +34,39 @@ type Dimension struct {
 	Description string `json:"description"` // 维度描述，例如"评估吸尘器的吸力大小和清洁效果"
 }
 
+// cleanJSONResponse 清理AI返回的JSON响应
+// 移除Markdown代码块标记（```json 和 ```）
+func cleanJSONResponse(response string) string {
+	// 去除首尾空白
+	response = strings.TrimSpace(response)
+
+	// 移除 ```json 或 ``` 开头
+	if strings.HasPrefix(response, "```json") {
+		response = strings.TrimPrefix(response, "```json")
+	} else if strings.HasPrefix(response, "```") {
+		response = strings.TrimPrefix(response, "```")
+	}
+
+	// 移除 ``` 结尾
+	if strings.HasSuffix(response, "```") {
+		response = strings.TrimSuffix(response, "```")
+	}
+
+	// 再次去除首尾空白
+	response = strings.TrimSpace(response)
+
+	// 如果还有问题，尝试用正则提取JSON对象
+	if !strings.HasPrefix(response, "{") {
+		// 尝试提取 {...} 部分
+		re := regexp.MustCompile(`(?s)\{.*\}`)
+		if match := re.FindString(response); match != "" {
+			response = match
+		}
+	}
+
+	return response
+}
+
 // ParseKeyword 解析关键词
 // 这是核心方法，调用AI来解析用户输入的商品类目
 func (c *Client) ParseKeyword(ctx context.Context, req ParseKeywordRequest) (*ParseKeywordResponse, error) {
@@ -50,9 +85,18 @@ func (c *Client) ParseKeyword(ctx context.Context, req ParseKeywordRequest) (*Pa
 
 4. 提出6个针对性的评价维度（根据商品特点和用户特殊需求调整）
 
-5. 生成3-5个B站搜索关键词（结合商品类型和用户需求）
+5. 生成B站搜索关键词，包含两类：
+   a) 品牌特定关键词（3-5个）：每个主流品牌的"品牌名+商品类型"组合
+      例如："戴森吸尘器"、"小米吸尘器"
+   
+   b) 通用发现关键词（4个）：不包含品牌名，用于发现市场上所有品牌
+      必须包含以下4种类型：
+      - "商品类型+评测"（如"自动猫砂盆评测"）
+      - "商品类型+推荐"（如"自动猫砂盆推荐"）
+      - "商品类型+横评"（如"自动猫砂盆横评"）
+      - "商品类型+对比"（如"自动猫砂盆对比"）
 
-返回JSON格式：
+直接返回JSON格式，不要使用Markdown代码块：
 {
   "understanding": "我理解您想购买...",
   "product_type": "商品类型",
@@ -63,14 +107,24 @@ func (c *Client) ParseKeyword(ctx context.Context, req ParseKeywordRequest) (*Pa
   "dimensions": [
     {"name": "维度名", "description": "维度说明（结合用户需求）"}
   ],
-  "keywords": ["关键词1", "关键词2", "关键词3"]
+  "keywords": [
+    "品牌1+商品类型",
+    "品牌2+商品类型",
+    "品牌3+商品类型",
+    "商品类型+评测",
+    "商品类型+推荐",
+    "商品类型+横评",
+    "商品类型+对比"
+  ]
 }
 
 注意：
 - 如果用户没有提到预算/场景/特殊需求，对应字段可以为空或省略
 - 品牌名称要准确，使用官方中文名
 - 维度要针对用户的特殊需求调整（如用户提到宠物，维度描述要体现对宠物毛发的处理能力）
-- 关键词要结合用户需求生成（如预算、场景等）`
+- 品牌特定关键词：结合用户需求生成（如预算、场景等）
+- 通用发现关键词：必须包含"评测"、"推荐"、"横评"、"对比"这4种类型，用于发现所有品牌
+- 重要：直接返回JSON，不要用代码块包裹`
 
 	// 构建用户提示词，传入用户输入的商品类目
 	userPrompt := fmt.Sprintf("用户需求：%s", req.Requirement)
@@ -87,10 +141,14 @@ func (c *Client) ParseKeyword(ctx context.Context, req ParseKeywordRequest) (*Pa
 		return nil, fmt.Errorf("AI请求失败: %w", err)
 	}
 
+	// 清理AI返回的响应（移除Markdown代码块标记）
+	cleanedResponse := cleanJSONResponse(response)
+
 	// 解析AI返回的JSON响应
 	var result ParseKeywordResponse
-	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		return nil, fmt.Errorf("解析AI响应失败: %w", err)
+	if err := json.Unmarshal([]byte(cleanedResponse), &result); err != nil {
+		// 如果解析失败，记录原始响应以便调试
+		return nil, fmt.Errorf("解析AI响应失败: %w (原始响应: %s)", err, response[:min(len(response), 200)])
 	}
 
 	// 验证结果的完整性
@@ -111,4 +169,12 @@ func (c *Client) ParseKeyword(ctx context.Context, req ParseKeywordRequest) (*Pa
 	}
 
 	return &result, nil
+}
+
+// min 返回两个整数中的较小值
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

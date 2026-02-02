@@ -3,6 +3,7 @@ package task
 import (
 	"bilibili-analyzer/backend/ai"
 	"bilibili-analyzer/backend/bilibili"
+	"bilibili-analyzer/backend/comment"
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/models"
 	"bilibili-analyzer/backend/report"
@@ -31,6 +32,8 @@ type TaskConfig struct {
 	MaxConcurrency       int // 最大并发数（默认3）
 	AIBatchSize          int // AI分析批次大小（默认5）
 	VideoDateRangeMonths int // 视频时间范围（月），0表示不限制，默认24（2年）
+	MinVideoDuration     int // 最小视频时长（秒），0表示不过滤
+	MaxComments          int // 最大分析评论数（默认500）
 }
 
 // DefaultTaskConfig 默认任务配置
@@ -39,9 +42,11 @@ func DefaultTaskConfig() TaskConfig {
 	return TaskConfig{
 		MaxVideosPerKeyword:  20,
 		MaxCommentsPerVideo:  200,
-		MaxConcurrency:       5,  // 从3增加到5，提升抓取速度
-		AIBatchSize:          10, // 从5增加到10，减少AI API调用次数
-		VideoDateRangeMonths: 0,  // 默认不限时间
+		MaxConcurrency:       5,   // 从3增加到5，提升抓取速度
+		AIBatchSize:          10,  // 从5增加到10，减少AI API调用次数
+		VideoDateRangeMonths: 0,   // 默认不限时间
+		MinVideoDuration:     30,  // 默认过滤30秒以下短视频
+		MaxComments:          500, // 默认分析500条评论
 	}
 }
 
@@ -54,14 +59,6 @@ type TaskRequest struct {
 	Keywords    []string       // 搜索关键词
 }
 
-// CommentWithVideo 带视频信息的评论
-type CommentWithVideo struct {
-	Content    string
-	VideoTitle string
-	VideoBVID  string
-	Ctime      int64 // 评论发布时间戳（Unix时间戳）
-}
-
 // Executor 任务执行器
 // 整合搜索、抓取、分析、报告生成的完整流程
 type Executor struct {
@@ -72,7 +69,25 @@ type Executor struct {
 func NewExecutor(config *TaskConfig) *Executor {
 	cfg := DefaultTaskConfig()
 	if config != nil {
-		cfg = *config
+		// 只覆盖非零值的字段，保留默认值
+		if config.MaxVideosPerKeyword > 0 {
+			cfg.MaxVideosPerKeyword = config.MaxVideosPerKeyword
+		}
+		if config.MaxCommentsPerVideo > 0 {
+			cfg.MaxCommentsPerVideo = config.MaxCommentsPerVideo
+		}
+		if config.MaxConcurrency > 0 {
+			cfg.MaxConcurrency = config.MaxConcurrency
+		}
+		if config.AIBatchSize > 0 {
+			cfg.AIBatchSize = config.AIBatchSize
+		}
+		// VideoDateRangeMonths 和 MinVideoDuration 可以是 0（表示不限制）
+		cfg.VideoDateRangeMonths = config.VideoDateRangeMonths
+		cfg.MinVideoDuration = config.MinVideoDuration
+		if config.MaxComments > 0 {
+			cfg.MaxComments = config.MaxComments
+		}
 	}
 	return &Executor{config: cfg}
 }
@@ -93,6 +108,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段1：获取配置
 	sse.PushProgress(taskID, sse.StatusSearching, 0, 100, "正在加载配置...")
+	e.updateTaskProgress(history.ID, sse.StatusSearching, 0, "正在加载配置...")
 
 	settings, err := e.loadSettings()
 	if err != nil {
@@ -103,6 +119,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段2：搜索视频
 	sse.PushProgress(taskID, sse.StatusSearching, 5, 100, "正在搜索相关视频...")
+	e.updateTaskProgress(history.ID, sse.StatusSearching, 5, "正在搜索相关视频...")
 
 	biliClient := bilibili.NewClient(settings.BilibiliCookie)
 	allVideos, err := e.searchVideos(ctx, taskID, biliClient, req.Keywords)
@@ -122,6 +139,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段3：抓取评论
 	sse.PushProgress(taskID, sse.StatusScraping, 20, 100, fmt.Sprintf("开始抓取%d个视频的评论...", len(allVideos)))
+	e.updateTaskProgress(history.ID, sse.StatusScraping, 20, fmt.Sprintf("开始抓取%d个视频的评论...", len(allVideos)))
 
 	scraper := bilibili.NewScraper(biliClient, &bilibili.ScraperConfig{
 		MaxVideos:           len(allVideos),
@@ -152,13 +170,14 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段4：AI分析评论
 	sse.PushProgress(taskID, sse.StatusAnalyzing, 50, 100, "正在使用AI分析评论...")
+	e.updateTaskProgress(history.ID, sse.StatusAnalyzing, 50, "正在使用AI分析评论...")
 
 	aiClient := ai.NewClient(ai.Config{
 		APIBase: settings.AIBaseURL,
 		APIKey:  settings.AIAPIKey,
 		Model:   settings.AIModel,
 	})
-	analysisResults, err := e.analyzeComments(ctx, taskID, aiClient, scrapeResult, req.Brands, req.Dimensions)
+	analysisResults, err := e.analyzeComments(ctx, taskID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, fmt.Sprintf("AI分析失败: %v", err))
@@ -169,6 +188,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段5：生成报告
 	sse.PushProgress(taskID, sse.StatusGenerating, 85, 100, "正在生成分析报告...")
+	e.updateTaskProgress(history.ID, sse.StatusGenerating, 85, "正在生成分析报告...")
 
 	// 构建统计数据
 	commentsByBrand := make(map[string]int)
@@ -186,6 +206,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 			TotalComments:   scrapeResult.Stats.TotalComments,
 			CommentsByBrand: commentsByBrand,
 		},
+		Videos: scrapeResult.Videos,
 	}
 
 	reportData, err := report.GenerateReportWithInput(reportInput)
@@ -204,6 +225,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 阶段6：保存报告到数据库
 	sse.PushProgress(taskID, sse.StatusGenerating, 95, 100, "正在保存报告...")
+	e.updateTaskProgress(history.ID, sse.StatusGenerating, 95, "正在保存报告...")
 
 	reportID, err := e.saveReport(history.ID, reportData)
 	if err != nil {
@@ -243,13 +265,21 @@ func (e *Executor) createHistory(req TaskRequest, taskID string) (*models.Analys
 	}
 	dimensionsJSON, _ := json.Marshal(dimNames)
 
+	// 序列化任务配置
+	configJSON, _ := json.Marshal(e.config)
+
 	history := &models.AnalysisHistory{
-		TaskID:     taskID,
-		Category:   req.Requirement,
-		Keywords:   string(keywordsJSON),
-		Brands:     string(brandsJSON),
-		Dimensions: string(dimensionsJSON),
-		Status:     models.StatusProcessing,
+		TaskID:        taskID,
+		Category:      req.Requirement,
+		Keywords:      string(keywordsJSON),
+		Brands:        string(brandsJSON),
+		Dimensions:    string(dimensionsJSON),
+		Status:        models.StatusProcessing,
+		Stage:         "initializing",
+		Progress:      0,
+		ProgressMsg:   "任务初始化中...",
+		TaskConfig:    string(configJSON),
+		LastHeartbeat: time.Now(),
 	}
 
 	if err := database.DB.Create(history).Error; err != nil {
@@ -301,7 +331,7 @@ func (e *Executor) searchVideos(ctx context.Context, taskID string, client *bili
 		sse.PushProgress(taskID, sse.StatusSearching, progress, 100,
 			fmt.Sprintf("正在搜索: %s (%d/%d)", keyword, i+1, len(keywords)))
 
-		videos, err := client.SearchVideosWithLimit(keyword, e.config.MaxVideosPerKeyword)
+		videos, err := client.SearchVideosWithLimit(keyword, e.config.MaxVideosPerKeyword, e.config.MinVideoDuration)
 		if err != nil {
 			log.Printf("[Task %s] Search failed for keyword '%s': %v", taskID, keyword, err)
 			continue // 单个关键词失败不影响整体
@@ -347,30 +377,59 @@ func (e *Executor) analyzeComments(
 	aiClient *ai.Client,
 	scrapeResult *bilibili.ScrapeResult,
 	brands []string,
+	keywords []string,
 	dimensions []ai.Dimension,
+	category string,
 ) (map[string][]report.CommentWithScore, error) {
 
-	allComments := GetAllCommentsWithVideo(scrapeResult)
-	if len(allComments) == 0 {
+	videoMap := make(map[string]bilibili.VideoInfo)
+	for _, v := range scrapeResult.Videos {
+		videoMap[v.BVID] = v
+	}
+
+	var rawComments []bilibili.Comment
+	rpidToBVID := make(map[int64]string)
+
+	for bvid, comments := range scrapeResult.Comments {
+		for _, c := range comments {
+			rawComments = append(rawComments, c)
+			rpidToBVID[c.RPID] = bvid
+			for _, r := range c.Replies {
+				rawComments = append(rawComments, r)
+				rpidToBVID[r.RPID] = bvid
+			}
+		}
+	}
+
+	if len(rawComments) == 0 {
 		return nil, fmt.Errorf("没有获取到任何评论")
 	}
 
-	log.Printf("[Task %s] Analyzing %d comments...", taskID, len(allComments))
+	allKeywords := append([]string{}, brands...)
+	allKeywords = append(allKeywords, keywords...)
 
-	maxComments := 500
-	if len(allComments) > maxComments {
-		allComments = allComments[:maxComments]
-	}
+	filteredRawComments := comment.FilterAndRank(rawComments, comment.FilterConfig{
+		MinLength:   10,
+		FilterEmoji: true,
+		Keywords:    allKeywords,
+		MaxComments: e.config.MaxComments,
+	})
 
-	inputs := make([]ai.CommentInput, len(allComments))
+	log.Printf("[Task %s] Filtered %d→%d comments", taskID, len(rawComments), len(filteredRawComments))
+
+	inputs := make([]ai.CommentInput, len(filteredRawComments))
 	commentTimeMap := make(map[string]int64) // 评论ID -> 时间戳映射
-	for i, c := range allComments {
+
+	for i, c := range filteredRawComments {
 		commentID := fmt.Sprintf("comment_%d", i)
+		bvid := rpidToBVID[c.RPID]
+		video := videoMap[bvid]
+
 		inputs[i] = ai.CommentInput{
 			ID:         commentID,
-			Content:    c.Content,
-			VideoTitle: c.VideoTitle,
-			VideoBVID:  c.VideoBVID,
+			Content:    c.Content.Message,
+			VideoTitle: video.Title,
+			VideoBVID:  video.BVID,
 		}
 		commentTimeMap[commentID] = c.Ctime
 	}
@@ -381,6 +440,65 @@ func (e *Executor) analyzeComments(
 	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(ctx, inputs, dimensions, e.config.AIBatchSize)
 	if err != nil {
 		return nil, fmt.Errorf("AI分析失败: %w", err)
+	}
+
+	// === 批量识别未知品牌 ===
+	// 收集品牌为"未知"但有型号的评论
+	unknownBrandModels := make(map[string]bool)
+	for _, r := range analysisResults {
+		if r.Error != "" || r.Scores == nil {
+			continue
+		}
+		brand := strings.TrimSpace(r.Brand)
+		model := strings.TrimSpace(r.Model)
+		if (brand == "" || brand == "未知") && model != "" && model != "未知" && model != "通用" {
+			unknownBrandModels[model] = true
+		}
+	}
+
+	// 批量调用AI识别品牌
+	var modelToBrand map[string]string
+	if len(unknownBrandModels) > 0 {
+		models := make([]string, 0, len(unknownBrandModels))
+		for m := range unknownBrandModels {
+			models = append(models, m)
+		}
+		log.Printf("[Task %s] 🔍 AI识别未知品牌: %v", taskID, models)
+
+		var err error
+		// 收集已发现的品牌（从analysisResults中提取）
+		discoveredBrands := collectDiscoveredBrands(analysisResults)
+
+		identifyCtx := ai.BrandIdentifyContext{
+			Category:         category,
+			KnownBrands:      brands,
+			DiscoveredBrands: discoveredBrands,
+		}
+		modelToBrand, err = aiClient.IdentifyBrandsForModels(ctx, models, identifyCtx)
+		if err != nil {
+			log.Printf("[Task %s] ⚠️ 品牌识别失败: %v", taskID, err)
+			modelToBrand = make(map[string]string)
+		}
+	}
+
+	// 更新分析结果中的品牌
+	for i := range analysisResults {
+		r := &analysisResults[i]
+		brand := strings.TrimSpace(r.Brand)
+		model := strings.TrimSpace(r.Model)
+
+		// 如果品牌未知，尝试从AI识别结果获取
+		if (brand == "" || brand == "未知") && model != "" {
+			if identifiedBrand, ok := modelToBrand[model]; ok && identifiedBrand != "" && identifiedBrand != "未知" {
+				r.Brand = identifiedBrand
+				brand = identifiedBrand
+			}
+		}
+
+		// 格式化品牌名称（纯字母转大写）
+		if brand != "" {
+			r.Brand = formatBrandName(brand)
+		}
 	}
 
 	// === DISCOVERY MODE: 收集所有AI识别的品牌，不仅仅是用户指定的 ===
@@ -519,6 +637,16 @@ func (e *Executor) updateHistoryWithReport(historyID uint, reportID uint) {
 	})
 }
 
+// updateTaskProgress 更新任务进度到数据库
+func (e *Executor) updateTaskProgress(historyID uint, stage string, progress int, message string) {
+	database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
+		"stage":          stage,
+		"progress":       progress,
+		"progress_msg":   message,
+		"last_heartbeat": time.Now(),
+	})
+}
+
 // max 返回两个整数中的较大值
 func max(a, b int) int {
 	if a > b {
@@ -564,47 +692,6 @@ func (e *Executor) generateAIRecommendation(ctx context.Context, aiClient *ai.Cl
 	})
 }
 
-func GetAllCommentsWithVideo(result *bilibili.ScrapeResult) []CommentWithVideo {
-	var comments []CommentWithVideo
-	mainCommentCount := 0
-	replyCount := 0
-
-	videoTitleMap := make(map[string]string)
-	for _, video := range result.Videos {
-		videoTitleMap[video.BVID] = video.Title
-	}
-
-	for bvid, videoComments := range result.Comments {
-		videoTitle := videoTitleMap[bvid]
-		for _, c := range videoComments {
-			// 收集主评论
-			comments = append(comments, CommentWithVideo{
-				Content:    c.Content.Message,
-				VideoTitle: videoTitle,
-				VideoBVID:  bvid,
-				Ctime:      c.Ctime,
-			})
-			mainCommentCount++
-
-			// 收集子评论（回复）
-			for _, r := range c.Replies {
-				comments = append(comments, CommentWithVideo{
-					Content:    r.Content.Message,
-					VideoTitle: videoTitle,
-					VideoBVID:  bvid,
-					Ctime:      r.Ctime,
-				})
-				replyCount++
-			}
-		}
-	}
-
-	log.Printf("[评论收集] 主评论 %d 条, 子评论（回复）%d 条, 总计 %d 条",
-		mainCommentCount, replyCount, len(comments))
-
-	return comments
-}
-
 // normalizeBrand 品牌名称归一化
 // 处理常见的品牌别名，返回统一的品牌名称
 func normalizeBrand(brand string) string {
@@ -635,6 +722,30 @@ func normalizeBrand(brand string) string {
 	}
 
 	return brand // 返回原始名称
+}
+
+// formatBrandName 格式化品牌名称
+// 纯字母品牌转全大写，中文品牌保持原样
+func formatBrandName(brand string) string {
+	brand = strings.TrimSpace(brand)
+	if brand == "" {
+		return brand
+	}
+
+	// 检查是否为纯字母（ASCII字母）
+	isPureAlpha := true
+	for _, r := range brand {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+			isPureAlpha = false
+			break
+		}
+	}
+
+	if isPureAlpha {
+		return strings.ToUpper(brand)
+	}
+
+	return brand
 }
 
 // extractModelFromContent 从评论内容中提取型号（正则匹配后备方案）
@@ -670,4 +781,24 @@ func extractModelFromContent(content string) string {
 	}
 
 	return "" // 未找到型号
+}
+
+// collectDiscoveredBrands 从分析结果中收集已发现的品牌
+func collectDiscoveredBrands(results []ai.CommentAnalysisResult) []string {
+	brandSet := make(map[string]bool)
+	for _, r := range results {
+		if r.Error != "" || r.Brand == "" || r.Brand == "未知" {
+			continue
+		}
+		brand := strings.TrimSpace(r.Brand)
+		if brand != "" {
+			brandSet[brand] = true
+		}
+	}
+
+	brands := make([]string, 0, len(brandSet))
+	for brand := range brandSet {
+		brands = append(brands, brand)
+	}
+	return brands
 }

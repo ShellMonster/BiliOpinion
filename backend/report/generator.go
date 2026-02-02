@@ -2,11 +2,57 @@ package report
 
 import (
 	"bilibili-analyzer/backend/ai"
+	"bilibili-analyzer/backend/bilibili"
 	"bilibili-analyzer/backend/models"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 )
+
+// normalizeModelKey 生成归一化的型号key用于比对
+// 规则：品牌小写 + "|" + 型号去空格小写
+// 例如：("OPPO", "TWS 5") -> "oppo|tws5"
+func normalizeModelKey(brand, model string) string {
+	brandKey := strings.ToLower(strings.TrimSpace(brand))
+	modelKey := strings.ToLower(strings.TrimSpace(model))
+	modelKey = strings.ReplaceAll(modelKey, " ", "")
+	modelKey = strings.ReplaceAll(modelKey, "-", "")
+	modelKey = strings.ReplaceAll(modelKey, "_", "")
+	return brandKey + "|" + modelKey
+}
+
+// getDisplayModel 从多个型号变体中选择最佳显示名称
+// 优先选择：有空格分隔的 > 首字母大写的 > 第一个出现的
+func getDisplayModel(variants []string) string {
+	if len(variants) == 0 {
+		return ""
+	}
+	if len(variants) == 1 {
+		return variants[0]
+	}
+	for _, v := range variants {
+		if strings.Contains(v, " ") {
+			return v
+		}
+	}
+	for _, v := range variants {
+		if len(v) > 0 && v[0] >= 'A' && v[0] <= 'Z' {
+			return v
+		}
+	}
+	return variants[0]
+}
+
+// VideoSource 视频来源信息
+type VideoSource struct {
+	BVID        string `json:"bvid"`         // BV号
+	Title       string `json:"title"`        // 视频标题
+	Author      string `json:"author"`       // UP主
+	Play        int    `json:"play"`         // 播放量
+	VideoReview int    `json:"video_review"` // 评论数
+}
 
 // ReportData 报告数据结构
 // 包含分析的完整结果，包括品牌、维度、得分、排名和购买建议
@@ -22,6 +68,8 @@ type ReportData struct {
 	TopComments   map[string][]TypicalComment `json:"top_comments"`   // 品牌 -> 好评列表
 	BadComments   map[string][]TypicalComment `json:"bad_comments"`   // 品牌 -> 差评列表
 	BrandAnalysis map[string]BrandAnalysis    `json:"brand_analysis"` // 品牌 -> 优劣势分析
+	ModelRankings []ModelRanking              `json:"model_rankings"` // 型号排名列表
+	VideoSources  []VideoSource               `json:"video_sources"`  // 视频来源列表
 }
 
 // BrandRanking 品牌排名信息
@@ -55,10 +103,23 @@ type BrandAnalysis struct {
 	Weaknesses []string `json:"weaknesses"` // 劣势维度（得分<6.0）
 }
 
+// ModelRanking 型号排名信息
+type ModelRanking struct {
+	Model        string             `json:"model"`         // 型号名称
+	Brand        string             `json:"brand"`         // 品牌名称
+	OverallScore float64            `json:"overall_score"` // 综合得分
+	Rank         int                `json:"rank"`          // 排名
+	Scores       map[string]float64 `json:"scores"`        // 各维度得分
+	CommentCount int                `json:"comment_count"` // 评论数量
+}
+
 // CommentWithScore 带得分的评论
 type CommentWithScore struct {
-	Content string
-	Scores  map[string]*float64
+	Content     string
+	Scores      map[string]*float64
+	Brand       string
+	Model       string
+	PublishTime time.Time
 }
 
 // GenerateReportInput 报告生成输入参数
@@ -68,6 +129,7 @@ type GenerateReportInput struct {
 	Dimensions      []ai.Dimension
 	AnalysisResults map[string][]CommentWithScore // brand -> 评论及得分列表
 	Stats           ReportStats
+	Videos          []bilibili.VideoInfo
 }
 
 // GenerateReport 生成分析报告
@@ -132,12 +194,40 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 
 	rankings := generateRankings(input.Brands, input.Dimensions, scores)
 	recommendation := generateRecommendation(rankings, input.Dimensions)
-	brandAnalysis := generateBrandAnalysis(input.Brands, input.Dimensions, scores)
+
+	// 收集所有发现的品牌（用于品牌分析）
+	allBrands := make([]string, 0, len(scores))
+	for brand := range scores {
+		if brand != "" {
+			allBrands = append(allBrands, brand)
+		}
+	}
+	brandAnalysis := generateBrandAnalysis(allBrands, input.Dimensions, scores)
 	topComments, badComments := selectTypicalComments(input.AnalysisResults)
+
+	// 生成型号排名（使用归一化key合并相似型号）
+	modelRankings := generateModelRankings(input.AnalysisResults, input.Dimensions)
+
+	// 收集所有品牌名称用于报告（按排名顺序）
+	allBrandNames := make([]string, 0, len(rankings))
+	for _, r := range rankings {
+		allBrandNames = append(allBrandNames, r.Brand)
+	}
+
+	videoSources := make([]VideoSource, len(input.Videos))
+	for i, v := range input.Videos {
+		videoSources[i] = VideoSource{
+			BVID:        v.BVID,
+			Title:       v.Title,
+			Author:      v.Author,
+			Play:        v.Play,
+			VideoReview: v.VideoReview,
+		}
+	}
 
 	return &ReportData{
 		Category:       input.Category,
-		Brands:         input.Brands,
+		Brands:         allBrandNames,
 		Dimensions:     input.Dimensions,
 		Scores:         scores,
 		Rankings:       rankings,
@@ -146,17 +236,120 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 		TopComments:    topComments,
 		BadComments:    badComments,
 		BrandAnalysis:  brandAnalysis,
+		ModelRankings:  modelRankings,
+		VideoSources:   videoSources,
 	}, nil
+}
+
+// generateModelRankings 生成型号排名
+// 按"品牌+型号"聚合，使用归一化key合并相似型号（如TWS5、TWS 5、Tws5）
+func generateModelRankings(analysisResults map[string][]CommentWithScore, dimensions []ai.Dimension) []ModelRanking {
+	modelScores := make(map[string]map[string][]float64) // normalizedKey -> 维度 -> 分数列表
+	modelCommentCounts := make(map[string]int)           // normalizedKey -> 评论数
+	modelVariants := make(map[string][]string)           // normalizedKey -> 原始型号变体列表
+	modelBrands := make(map[string]string)               // normalizedKey -> 品牌
+
+	for brandKey, results := range analysisResults {
+		for _, result := range results {
+			model := strings.TrimSpace(result.Model)
+			if model == "" || model == "未知" || model == "通用" {
+				continue
+			}
+			brand := strings.TrimSpace(result.Brand)
+			if brand == "" {
+				brand = strings.TrimSpace(brandKey)
+			}
+			if brand == "" || brand == "未知" {
+				continue
+			}
+
+			normalizedKey := normalizeModelKey(brand, model)
+			if modelScores[normalizedKey] == nil {
+				modelScores[normalizedKey] = make(map[string][]float64)
+				modelBrands[normalizedKey] = brand
+			}
+
+			modelVariants[normalizedKey] = append(modelVariants[normalizedKey], model)
+
+			for dimName, score := range result.Scores {
+				if score != nil {
+					modelScores[normalizedKey][dimName] = append(modelScores[normalizedKey][dimName], *score)
+				}
+			}
+			modelCommentCounts[normalizedKey]++
+		}
+	}
+
+	modelRankings := make([]ModelRanking, 0, len(modelScores))
+	for normalizedKey, dimScores := range modelScores {
+		commentCount := modelCommentCounts[normalizedKey]
+		if commentCount < 1 {
+			continue
+		}
+
+		brand := modelBrands[normalizedKey]
+		displayModel := getDisplayModel(modelVariants[normalizedKey])
+
+		avgScores := make(map[string]float64)
+		var total float64
+		var dimCount int
+		for dimName, scores := range dimScores {
+			if len(scores) == 0 {
+				continue
+			}
+			var sum float64
+			for _, s := range scores {
+				sum += s
+			}
+			avg := sum / float64(len(scores))
+			avgScores[dimName] = avg
+			total += avg
+			dimCount++
+		}
+		overallScore := 0.0
+		if dimCount > 0 {
+			overallScore = total / float64(dimCount)
+		}
+
+		modelRankings = append(modelRankings, ModelRanking{
+			Model:        displayModel,
+			Brand:        brand,
+			OverallScore: overallScore,
+			Scores:       avgScores,
+			CommentCount: commentCount,
+		})
+	}
+
+	// 按综合得分排序
+	sort.Slice(modelRankings, func(i, j int) bool {
+		if modelRankings[i].OverallScore == modelRankings[j].OverallScore {
+			if modelRankings[i].Brand == modelRankings[j].Brand {
+				return modelRankings[i].Model < modelRankings[j].Model
+			}
+			return modelRankings[i].Brand < modelRankings[j].Brand
+		}
+		return modelRankings[i].OverallScore > modelRankings[j].OverallScore
+	})
+
+	// 设置排名
+	for i := range modelRankings {
+		modelRankings[i].Rank = i + 1
+	}
+
+	return modelRankings
 }
 
 // generateRankings 生成品牌排名
 // 根据各维度得分计算综合得分，并按综合得分排序
+// 注意：遍历 scores 中的所有品牌（包括AI发现的新品牌），而不仅仅是用户指定的品牌
 func generateRankings(brands []string, dimensions []ai.Dimension, scores map[string]map[string]float64) []BrandRanking {
-	rankings := make([]BrandRanking, 0, len(brands))
+	rankings := make([]BrandRanking, 0, len(scores))
 
-	// 为每个品牌计算综合得分
-	for _, brand := range brands {
-		brandScores := scores[brand]
+	// 为每个品牌计算综合得分（遍历所有发现的品牌）
+	for brand, brandScores := range scores {
+		if brand == "" {
+			continue
+		}
 
 		// 计算综合得分（所有维度的平均值）
 		var total float64

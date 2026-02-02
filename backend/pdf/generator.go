@@ -61,6 +61,16 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	drawRankingTable(pdf, fontFamily, reportData, useEnglish)
 	pdf.Ln(4)
 
+	if len(reportData.ModelRankings) > 0 {
+		if useEnglish {
+			sectionHeader(pdf, fontFamily, "Model Rankings")
+		} else {
+			sectionHeader(pdf, fontFamily, "型号排名")
+		}
+		drawModelRankingTable(pdf, fontFamily, reportData, useEnglish)
+		pdf.Ln(4)
+	}
+
 	// 得分对比柱状图
 	if useEnglish {
 		sectionHeader(pdf, fontFamily, "Score Comparison")
@@ -294,6 +304,78 @@ func drawRankingTable(pdf *fpdf.Fpdf, family string, reportData *report.ReportDa
 		pdf.SetFillColor(fillR, fillG, fillB)
 		pdf.SetTextColor(txtR, txtG, txtB)
 		pdf.CellFormat(colScore, rowH, fmt.Sprintf("%.1f", r.OverallScore), "1", 1, "C", true, 0, "")
+	}
+
+	pdf.SetTextColor(17, 24, 39)
+}
+
+// drawModelRankingTable 绘制型号排名表格
+// 显示型号、品牌、综合得分和样本数
+func drawModelRankingTable(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, useEnglish bool) {
+	if len(reportData.ModelRankings) == 0 {
+		setFont(pdf, family, "", 11)
+		pdf.SetTextColor(75, 85, 99)
+		if useEnglish {
+			pdf.MultiCell(0, 6, "No model ranking data available", "1", "L", false)
+		} else {
+			pdf.MultiCell(0, 6, "暂无型号排名数据", "1", "L", false)
+		}
+		return
+	}
+
+	left, _, right, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	usableW := pageW - left - right
+
+	setFont(pdf, family, "B", 11)
+	pdf.SetFillColor(241, 245, 249)
+	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetTextColor(15, 23, 42)
+
+	// 列宽分配：排名、型号、品牌、综合得分、样本数
+	colRank := 16.0
+	colModel := usableW * 0.30
+	colBrand := usableW * 0.20
+	colScore := usableW * 0.18
+	colCount := usableW - colRank - colModel - colBrand - colScore
+	rowH := 8.0
+
+	// 表头
+	if useEnglish {
+		pdf.CellFormat(colRank, rowH, "Rank", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colModel, rowH, "Model", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colBrand, rowH, "Brand", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colScore, rowH, "Score", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colCount, rowH, "Samples", "1", 1, "C", true, 0, "")
+	} else {
+		pdf.CellFormat(colRank, rowH, "排名", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colModel, rowH, "型号", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colBrand, rowH, "品牌", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colScore, rowH, "综合得分", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colCount, rowH, "样本数", "1", 1, "C", true, 0, "")
+	}
+
+	// 数据行
+	setFont(pdf, family, "", 11)
+	for _, r := range reportData.ModelRankings {
+		ensureSpace(pdf, rowH)
+
+		pdf.SetTextColor(17, 24, 39)
+		pdf.SetFillColor(255, 255, 255)
+		pdf.CellFormat(colRank, rowH, fmt.Sprintf("%d", r.Rank), "1", 0, "C", false, 0, "")
+		pdf.CellFormat(colModel, rowH, safeText(r.Model), "1", 0, "L", false, 0, "")
+		pdf.CellFormat(colBrand, rowH, safeText(r.Brand), "1", 0, "L", false, 0, "")
+
+		// 得分列使用颜色编码
+		fillR, fillG, fillB, txtR, txtG, txtB := scoreColors(r.OverallScore)
+		pdf.SetFillColor(fillR, fillG, fillB)
+		pdf.SetTextColor(txtR, txtG, txtB)
+		pdf.CellFormat(colScore, rowH, fmt.Sprintf("%.1f", r.OverallScore), "1", 0, "C", true, 0, "")
+
+		// 样本数列
+		pdf.SetTextColor(17, 24, 39)
+		pdf.SetFillColor(255, 255, 255)
+		pdf.CellFormat(colCount, rowH, fmt.Sprintf("%d", r.CommentCount), "1", 1, "C", false, 0, "")
 	}
 
 	pdf.SetTextColor(17, 24, 39)

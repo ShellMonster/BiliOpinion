@@ -60,6 +60,11 @@ func HandleSSE(c *gin.Context) {
 		Message: "SSE连接已建立",
 	})
 
+	// 发送最后一次进度状态（如果存在），让新连接的客户端能看到当前进度
+	if lastStatus, exists := GetLastStatus(taskID); exists {
+		sendSSEMessage(c.Writer, flusher, lastStatus)
+	}
+
 	// 监听状态更新
 	for {
 		select {
@@ -78,9 +83,7 @@ func HandleSSE(c *gin.Context) {
 			}
 
 		case <-c.Request.Context().Done():
-			// 客户端断开连接
-			// 清理任务通道
-			CloseTaskChannel(taskID)
+			// 客户端断开连接，但不关闭通道，让任务继续执行
 			return
 		}
 	}
@@ -153,6 +156,11 @@ func HandleSSEWithHeartbeat(c *gin.Context) {
 		Message: "SSE连接已建立",
 	})
 
+	// 发送最后一次进度状态（如果存在）
+	if lastStatus, exists := GetLastStatus(taskID); exists {
+		sendSSEMessage(c.Writer, flusher, lastStatus)
+	}
+
 	// 创建心跳定时器（30秒）
 	// heartbeatTicker := time.NewTicker(30 * time.Second)
 	// defer heartbeatTicker.Stop()
@@ -180,7 +188,6 @@ func HandleSSEWithHeartbeat(c *gin.Context) {
 		// 	})
 
 		case <-c.Request.Context().Done():
-			CloseTaskChannel(taskID)
 			return
 		}
 	}

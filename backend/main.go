@@ -4,7 +4,9 @@ import (
 	"bilibili-analyzer/backend/api"
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/sse"
+	"bilibili-analyzer/backend/task"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +19,18 @@ func main() {
 	}
 
 	log.Println("🚀 Bilibili Analyzer - Backend Server Starting...")
+
+	// 恢复未完成的任务（后端重启后）
+	go task.RecoverIncompleteTasks()
+
+	// 启动定时清理任务（每5分钟检查一次超时任务）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			task.CleanupTimedOutTasks()
+		}
+	}()
 
 	// 创建Gin路由器
 	r := gin.Default()

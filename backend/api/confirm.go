@@ -18,7 +18,10 @@ type ConfirmRequest struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	} `json:"dimensions"`
-	Keywords []string `json:"keywords"`
+	Keywords             []string `json:"keywords"`
+	VideoDateRangeMonths int      `json:"video_date_range_months,omitempty"` // 视频时间范围（月），0表示不限制，默认24
+	MinVideoDuration     int      `json:"min_video_duration,omitempty"`      // 最小视频时长（秒），0表示不过滤
+	MaxComments          int      `json:"max_comments,omitempty"`            // 最大分析评论数，默认500
 }
 
 func HandleConfirm(c *gin.Context) {
@@ -59,7 +62,13 @@ func HandleConfirm(c *gin.Context) {
 	go func() {
 		defer sse.CloseTaskChannel(taskID)
 
-		executor := task.NewExecutor(nil)
+		config := &task.TaskConfig{
+			VideoDateRangeMonths: req.VideoDateRangeMonths,
+			MinVideoDuration:     req.MinVideoDuration,
+			MaxComments:          req.MaxComments,
+		}
+
+		executor := task.NewExecutor(config)
 		err := executor.Execute(context.Background(), task.TaskRequest{
 			TaskID:      taskID,
 			Requirement: req.Requirement,

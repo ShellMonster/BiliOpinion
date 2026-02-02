@@ -41,6 +41,14 @@ interface BrandAnalysis {
   weaknesses: string[]
 }
 
+interface VideoSource {
+  bvid: string
+  title: string
+  author: string
+  play: number
+  video_review: number
+}
+
 interface ReportData {
   category: string
   brands: string[]
@@ -53,6 +61,7 @@ interface ReportData {
   top_comments?: Record<string, TypicalComment[]>
   bad_comments?: Record<string, TypicalComment[]>
   brand_analysis?: Record<string, BrandAnalysis>
+  video_sources?: VideoSource[]
 }
 
 interface ApiResponse {
@@ -63,6 +72,7 @@ interface ApiResponse {
   created_at: string
 }
 
+
 const Report = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -72,6 +82,11 @@ const Report = () => {
   const [exporting, setExporting] = useState(false)
   const [specifiedBrands, setSpecifiedBrands] = useState<string[]>([])
   const { showToast } = useToast()
+
+  const formatNumber = (num: number) => {
+    if (num >= 10000) return (num / 10000).toFixed(1) + '万'
+    return num.toString()
+  }
 
   const handleExportPDF = async () => {
     if (!id) return
@@ -568,6 +583,31 @@ const Report = () => {
           <ReactMarkdown>{reportData.recommendation}</ReactMarkdown>
         </div>
       </div>
+
+      {reportData.video_sources && reportData.video_sources.length > 0 && (
+        <div className="glass-card">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">📺 视频来源</h3>
+          <div className="space-y-2">
+            {reportData.video_sources.map((video, index) => (
+              <div key={video.bvid} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                <span className="text-gray-400 font-mono text-sm w-6">{index + 1}.</span>
+                <a 
+                  href={`https://www.bilibili.com/video/${video.bvid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline flex-1 truncate"
+                  title={video.title}
+                >
+                  {video.title}
+                </a>
+                <span className="text-gray-500 text-sm whitespace-nowrap">
+                  ▶ {formatNumber(video.play)} · 💬 {formatNumber(video.video_review)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,7 +8,10 @@ import (
 // key: 任务ID, value: 状态通道
 var taskChannels = make(map[string]chan TaskStatus)
 
-// mu 保护taskChannels的读写锁
+// taskLastStatus 缓存每个任务的最后状态，用于新客户端连接时发送当前进度
+var taskLastStatus = make(map[string]TaskStatus)
+
+// mu 保护taskChannels和taskLastStatus的读写锁
 var mu sync.RWMutex
 
 // TaskStatus 任务状态结构
@@ -109,6 +112,15 @@ func CloseTaskChannel(taskID string) {
 		close(ch)
 		delete(taskChannels, taskID)
 	}
+	delete(taskLastStatus, taskID)
+}
+
+// GetLastStatus 获取任务的最后状态，用于新客户端连接时发送当前进度
+func GetLastStatus(taskID string) (TaskStatus, bool) {
+	mu.RLock()
+	defer mu.RUnlock()
+	status, exists := taskLastStatus[taskID]
+	return status, exists
 }
 
 // PushStatus 推送任务状态
@@ -128,16 +140,15 @@ func CloseTaskChannel(taskID string) {
 //	    Message: "正在搜索视频...",
 //	})
 func PushStatus(taskID string, status TaskStatus) {
-	mu.RLock()
+	mu.Lock()
+	taskLastStatus[taskID] = status
 	ch := taskChannels[taskID]
-	mu.RUnlock()
+	mu.Unlock()
 
 	if ch != nil {
-		// 非阻塞发送，如果通道满则跳过
 		select {
 		case ch <- status:
 		default:
-			// 通道满，跳过此消息
 		}
 	}
 }

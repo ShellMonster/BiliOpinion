@@ -25,7 +25,7 @@ const ReportHeader = ({
   const [excelExporting, setExcelExporting] = useState(false)
   const { showToast } = useToast()
 
-  // 导出图片功能
+  // 导出图片功能 (使用 html2canvas)
   const exportImage = async () => {
     const reportContainer = document.getElementById('report-container')
     if (!reportContainer) {

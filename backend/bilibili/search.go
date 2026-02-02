@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 // SearchVideosRequest 搜索视频请求参数
@@ -108,10 +112,11 @@ func (c *Client) SearchVideos(req SearchVideosRequest) ([]VideoInfo, int, error)
 		return nil, 0, fmt.Errorf("API错误: %s (code: %d)", searchResp.Message, searchResp.Code)
 	}
 
-	// 过滤掉BVID为空的视频
+	// 过滤掉BVID为空的视频，并清理标题中的HTML标签
 	var validVideos []VideoInfo
 	for _, v := range searchResp.Data.Result {
 		if v.BVID != "" {
+			v.Title = stripHTMLTags(v.Title) // 清理HTML标签
 			validVideos = append(validVideos, v)
 		}
 	}
@@ -125,6 +130,7 @@ func (c *Client) SearchVideos(req SearchVideosRequest) ([]VideoInfo, int, error)
 // 参数：
 //   - keyword: 搜索关键词
 //   - maxVideos: 最大视频数量（默认50）
+//   - minDurationSeconds: 最小视频时长（秒），0表示不过滤
 //
 // 返回：
 //   - []VideoInfo: 视频列表
@@ -132,8 +138,9 @@ func (c *Client) SearchVideos(req SearchVideosRequest) ([]VideoInfo, int, error)
 //
 // 示例：
 //
-//	videos, err := client.SearchVideosWithLimit("iPhone 15 评测", 50)
-func (c *Client) SearchVideosWithLimit(keyword string, maxVideos int) ([]VideoInfo, error) {
+//	videos, err := client.SearchVideosWithLimit("iPhone 15 评测", 50, 60)  // 过滤60秒以下视频
+//	videos, err := client.SearchVideosWithLimit("iPhone 15 评测", 50, 0)   // 不过滤视频
+func (c *Client) SearchVideosWithLimit(keyword string, maxVideos int, minDurationSeconds int) ([]VideoInfo, error) {
 	// 默认限制50个视频
 	if maxVideos <= 0 {
 		maxVideos = 50
@@ -142,6 +149,7 @@ func (c *Client) SearchVideosWithLimit(keyword string, maxVideos int) ([]VideoIn
 	var allVideos []VideoInfo
 	page := 1
 	pageSize := 20 // 每页20个
+	filteredCount := 0
 
 	for len(allVideos) < maxVideos {
 		// 搜索当前页
@@ -159,8 +167,22 @@ func (c *Client) SearchVideosWithLimit(keyword string, maxVideos int) ([]VideoIn
 			break
 		}
 
-		// 添加到结果列表
-		allVideos = append(allVideos, videos...)
+		// 过滤短视频（根据 minDurationSeconds 参数）
+		if minDurationSeconds > 0 {
+			for _, video := range videos {
+				durationSeconds := parseDuration(video.Duration)
+				if durationSeconds < minDurationSeconds {
+					filteredCount++
+					log.Printf("[Search] 过滤短视频: %s (时长: %s)", video.Title, video.Duration)
+					continue
+				}
+				allVideos = append(allVideos, video)
+			}
+		} else {
+			// 不过滤，直接添加所有视频
+			allVideos = append(allVideos, videos...)
+		}
+
 		page++
 
 		// 防止无限循环（最多搜索10页）
@@ -169,10 +191,50 @@ func (c *Client) SearchVideosWithLimit(keyword string, maxVideos int) ([]VideoIn
 		}
 	}
 
+	if filteredCount > 0 {
+		log.Printf("[Search] 共过滤 %d 个短视频", filteredCount)
+	}
+
 	// 截取到指定数量
 	if len(allVideos) > maxVideos {
 		allVideos = allVideos[:maxVideos]
 	}
 
 	return allVideos, nil
+}
+
+// parseDuration 解析时长字符串为秒数
+// 支持格式：
+// - "1:23" → 83秒
+// - "01:23:45" → 5025秒
+//
+// 参数：
+//   - duration: 时长字符串（格式：mm:ss 或 hh:mm:ss）
+//
+// 返回：
+//   - int: 时长秒数（解析失败返回0）
+func parseDuration(duration string) int {
+	parts := strings.Split(duration, ":")
+	seconds := 0
+	multiplier := 1
+
+	// 从右往左解析（秒、分、时）
+	for i := len(parts) - 1; i >= 0; i-- {
+		val, err := strconv.Atoi(parts[i])
+		if err != nil {
+			return 0
+		}
+		seconds += val * multiplier
+		multiplier *= 60
+	}
+
+	return seconds
+}
+
+// stripHTMLTags 移除字符串中的HTML标签
+// B站搜索API返回的标题包含<em class="keyword">高亮标签，需要清理
+func stripHTMLTags(s string) string {
+	// 使用正则移除所有HTML标签
+	re := regexp.MustCompile(`<[^>]*>`)
+	return re.ReplaceAllString(s, "")
 }

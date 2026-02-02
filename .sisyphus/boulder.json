@@ -1,9 +1,10 @@
 {
   "active_plan": "/Users/daozhang/Trae_AI/B站商品评论解析/.sisyphus/plans/report-visualization-upgrade.md",
   "plan_name": "report-visualization-upgrade",
-  "status": "in_progress",
-  "tasks_completed": 3,
+  "status": "completed",
+  "tasks_completed": 26,
   "tasks_total": 26,
   "started_at": "2026-02-02T16:15:06.533Z",
+  "completed_at": "2026-02-02T17:44:30.000Z",
   "session_ids": ["ses_3eaf4af4effelW4EnCOfhVsA6n"]
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import html2canvas from 'html2canvas'
 import * as XLSX from 'xlsx'
 import type { ReportData } from '../../types/report'
+import { useToast } from '../../hooks/useToast'
 
 interface ReportHeaderProps {
   category: string
@@ -22,12 +23,13 @@ const ReportHeader = ({
 }: ReportHeaderProps) => {
   const [imageExporting, setImageExporting] = useState(false)
   const [excelExporting, setExcelExporting] = useState(false)
+  const { showToast } = useToast()
 
   // 导出图片功能
   const exportImage = async () => {
     const reportContainer = document.getElementById('report-container')
     if (!reportContainer) {
-      alert('未找到报告内容')
+      showToast('未找到报告内容', 'error')
       return
     }
 
@@ -43,9 +45,10 @@ const ReportHeader = ({
       link.download = `报告_${category}_${reportId}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
+      showToast('图片导出成功', 'success')
     } catch (error) {
       console.error('导出图片失败:', error)
-      alert('导出图片失败')
+      showToast('导出图片失败', 'error')
     } finally {
       setImageExporting(false)
     }
@@ -54,7 +57,7 @@ const ReportHeader = ({
   // 导出Excel功能
   const exportExcel = () => {
     if (!reportData) {
-      alert('报告数据未加载')
+      showToast('报告数据未加载', 'error')
       return
     }
 
@@ -62,34 +65,56 @@ const ReportHeader = ({
     try {
       const wb = XLSX.utils.book_new()
       
-      // 品牌排名工作表
-      const brandData = reportData.rankings.map(r => ({
-        '品牌': r.brand,
-        '排名': r.rank,
-        '综合得分': r.overall_score,
-        ...r.scores
-      }))
-      const brandWs = XLSX.utils.json_to_sheet(brandData)
+      // 1. 品牌排名表
+      const brandHeaders = ['排名', '品牌', '综合得分', ...reportData.dimensions.map(d => d.name)]
+      const brandData = reportData.rankings.map(r => [
+        r.rank,
+        r.brand,
+        r.overall_score.toFixed(1),
+        ...reportData.dimensions.map(d => (r.scores[d.name] || 0).toFixed(1))
+      ])
+      const brandWs = XLSX.utils.aoa_to_sheet([brandHeaders, ...brandData])
+      // 设置列宽
+      const brandCols = [{ wch: 6 }, { wch: 15 }, { wch: 10 }, ...reportData.dimensions.map(() => ({ wch: 12 }))]
+      brandWs['!cols'] = brandCols
       XLSX.utils.book_append_sheet(wb, brandWs, '品牌排名')
       
-      // 型号排名工作表
+      // 2. 型号排名表
       if (reportData.model_rankings && reportData.model_rankings.length > 0) {
-        const modelData = reportData.model_rankings.map(m => ({
-          '型号': m.model,
-          '品牌': m.brand,
-          '排名': m.rank,
-          '综合得分': m.overall_score,
-          '评论数': m.comment_count,
-          ...m.scores
-        }))
-        const modelWs = XLSX.utils.json_to_sheet(modelData)
+        const modelHeaders = ['排名', '型号', '品牌', '综合得分', '评论数', ...reportData.dimensions.map(d => d.name)]
+        const modelData = reportData.model_rankings.map(r => [
+          r.rank,
+          r.model,
+          r.brand,
+          r.overall_score.toFixed(1),
+          r.comment_count,
+          ...reportData.dimensions.map(d => (r.scores[d.name] || 0).toFixed(1))
+        ])
+        const modelWs = XLSX.utils.aoa_to_sheet([modelHeaders, ...modelData])
+        const modelCols = [{ wch: 6 }, { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 8 }, ...reportData.dimensions.map(() => ({ wch: 12 }))]
+        modelWs['!cols'] = modelCols
         XLSX.utils.book_append_sheet(wb, modelWs, '型号排名')
+      }
+
+      // 3. 维度说明
+      const dimHeaders = ['维度名称', '维度说明']
+      const dimData = reportData.dimensions.map(d => [d.name, d.description])
+      const dimWs = XLSX.utils.aoa_to_sheet([dimHeaders, ...dimData])
+      dimWs['!cols'] = [{ wch: 15 }, { wch: 50 }]
+      XLSX.utils.book_append_sheet(wb, dimWs, '维度说明')
+
+      // 4. 购买建议
+      if (reportData.recommendation) {
+        const recWs = XLSX.utils.aoa_to_sheet([['购买建议'], [reportData.recommendation]])
+        recWs['!cols'] = [{ wch: 100 }]
+        XLSX.utils.book_append_sheet(wb, recWs, '购买建议')
       }
       
       XLSX.writeFile(wb, `报告_${category}_${reportId}.xlsx`)
+      showToast('Excel导出成功', 'success')
     } catch (error) {
       console.error('导出Excel失败:', error)
-      alert('导出Excel失败')
+      showToast('导出Excel失败', 'error')
     } finally {
       setExcelExporting(false)
     }
@@ -127,7 +152,7 @@ const ReportHeader = ({
         <button 
           onClick={exportExcel}
           disabled={excelExporting}
-          className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           {excelExporting ? (
             <>

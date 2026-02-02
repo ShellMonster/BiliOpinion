@@ -1,10 +1,13 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, Sparkles, AlertTriangle, Target, CheckCircle2 } from 'lucide-react';
-import type { ReportData } from '../../types/report';
+import type { ReportData, BrandRanking, BrandAnalysis } from '../../types/report';
 
 interface EnhancedSummaryProps {
-  data: ReportData;
+  data?: ReportData;
+  recommendation?: string;
+  rankings?: BrandRanking[];
+  brandAnalysis?: Record<string, BrandAnalysis>;
 }
 
 /**
@@ -13,8 +16,11 @@ interface EnhancedSummaryProps {
  * Displays the AI-generated purchase advice, scenario-based recommendations,
  * and avoidance guide (pitfalls) using the report recommendation data.
  */
-export const EnhancedSummary: React.FC<EnhancedSummaryProps> = ({ data }) => {
-  if (!data.recommendation) {
+export const EnhancedSummary: React.FC<EnhancedSummaryProps> = (props) => {
+  const recommendation = props.recommendation || props.data?.recommendation;
+  const rankings = props.rankings || props.data?.rankings;
+
+  if (!recommendation) {
     return null;
   }
 
@@ -75,7 +81,7 @@ export const EnhancedSummary: React.FC<EnhancedSummaryProps> = ({ data }) => {
             <h2 className="text-lg font-bold text-gray-900">AI 智能购买建议</h2>
             <p className="text-sm text-gray-500 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-amber-500" />
-              基于 {data.stats?.total_comments || 0} 条真实评价生成的深度分析
+              基于 {rankings?.length || 0} 个品牌分析生成的深度建议
             </p>
           </div>
         </div>
@@ -87,7 +93,7 @@ export const EnhancedSummary: React.FC<EnhancedSummaryProps> = ({ data }) => {
           <ReactMarkdown 
             components={markdownComponents}
           >
-            {data.recommendation}
+            {recommendation}
           </ReactMarkdown>
         </div>
 
@@ -110,3 +116,5 @@ export const EnhancedSummary: React.FC<EnhancedSummaryProps> = ({ data }) => {
     </div>
   );
 };
+
+export default EnhancedSummary;

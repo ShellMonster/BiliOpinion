@@ -499,6 +499,10 @@ func (e *Executor) analyzeComments(
 		if brand != "" {
 			r.Brand = formatBrandName(brand)
 		}
+
+		// AI分析返回后，清洗品牌和型号
+		analysisResults[i].Brand = comment.CleanBrandName(r.Brand, brands)
+		analysisResults[i].Model = comment.CleanModelName(r.Model)
 	}
 
 	// === DISCOVERY MODE: 收集所有AI识别的品牌，不仅仅是用户指定的 ===

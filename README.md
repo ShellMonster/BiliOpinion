@@ -95,55 +95,41 @@ graph TD
 
 ```mermaid
 graph TD
-    START(["用户输入需求"]) --> PARSE_REQ["发送解析请求"]
+    START(["用户输入需求"]) --> PHASE1["阶段1: 需求解析"]
+    PHASE1 --> AI1["AI 解析关键词"]
 
-    PARSE_REQ --> AI_KEYWORD["AI Agent<br/>解析关键词"]
-
-    AI_KEYWORD --> PARSE_RESP["返回解析结果"]
-    PARSE_RESP --> CONFIRM["用户确认"]
-
-    CONFIRM -->|"确认"| CREATE_TASK["创建任务记录"]
+    AI1 --> CONFIRM["用户确认?"]
     CONFIRM -->|"取消"| END(["结束"])
+    CONFIRM -->|"确认"| PHASE2["阶段2: 数据采集"]
 
-    CREATE_TASK --> SEARCH["搜索B站视频"]
-    SEARCH -->|"获取视频列表"| FILTER_VIDEO["过滤短视频"]
+    PHASE2 --> SEARCH["搜索B站视频"]
+    SEARCH --> SCRAPE["抓取评论"]
+    SCRAPE --> PHASE3["阶段3: AI分析"]
 
-    FILTER_VIDEO --> SCRAPE["并发抓取评论"]
-    SCRAPE -->|"收集评论"| CLEAN["清理评论数据"]
+    PHASE3 --> BATCH["分批处理"]
+    BATCH --> AI2["AI 分析评论"]
+    AI2 --> AI3["AI 识别品牌"]
 
-    CLEAN --> BATCH["分批处理评论"]
-    BATCH --> AI_ANALYZE["AI Agent<br/>批量分析评论"]
+    AI3 --> PHASE4["阶段4: 报告生成"]
+    PHASE4 --> RANK["计算排名"]
+    RANK --> AI4["AI 生成建议"]
+    AI4 --> REPORT["生成报告"]
 
-    AI_ANALYZE --> BRAND_IDENT["AI Agent<br/>识别未知品牌"]
-    BRAND_IDENT --> CLEAN_BRAND["清洗品牌名称"]
-
-    CLEAN_BRAND --> AGGREGATE["聚合分析结果"]
-    AGGREGATE --> CALC_SCORE["计算各维度得分"]
-
-    CALC_SCORE --> GEN_RANK["生成品牌排名"]
-    GEN_RANK --> GEN_MODEL["生成型号排名"]
-
-    GEN_MODEL --> AI_RECOMM["AI Agent<br/>生成购买建议"]
-    AI_RECOMM --> GEN_REPORT["生成完整报告"]
-
-    GEN_REPORT --> SAVE_DB["保存到数据库"]
-    SAVE_DB --> NOTIFY["推送完成通知"]
-
-    NOTIFY --> EXPORT["用户导出报告"]
-    EXPORT --> EXPORT_IMG["导出图片"]
-    EXPORT --> EXPORT_XLS["导出Excel"]
-    EXPORT --> EXPORT_PDF["导出PDF"]
-
-    EXPORT_IMG --> COMPLETE(["完成"])
-    EXPORT_XLS --> COMPLETE
-    EXPORT_PDF --> COMPLETE
+    REPORT --> SAVE["保存数据库"]
+    SAVE --> EXPORT["导出<br/>图片/Excel/PDF"]
+    EXPORT --> COMPLETE(["完成"])
 
     style START fill:#e1f5fe
-    style COMPLETE fill:#e1f5fe
-    style AI_KEYWORD fill:#fff3e0
-    style AI_ANALYZE fill:#fff3e0
-    style BRAND_IDENT fill:#fff3e0
-    style AI_RECOMM fill:#fff3e0
+    style COMPLETE fill:#e8f5e9
+    style END fill:#ffcdd2
+    style AI1 fill:#fff3e0
+    style AI2 fill:#fff3e0
+    style AI3 fill:#fff3e0
+    style AI4 fill:#fff3e0
+    style PHASE1 fill:#e3f2fd
+    style PHASE2 fill:#e3f2fd
+    style PHASE3 fill:#e3f2fd
+    style PHASE4 fill:#e3f2fd
 ```
 
 ---

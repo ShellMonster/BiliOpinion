@@ -118,7 +118,7 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
                 核心优势
               </h3>
               <div className="flex flex-wrap gap-2">
-                {analysis.strengths.length > 0 ? (
+                {analysis.strengths && analysis.strengths.length > 0 ? (
                   analysis.strengths.map((s, i) => (
                     <span key={i} className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-medium border border-emerald-100">
                       {s}
@@ -141,7 +141,7 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
                 待改进点
               </h3>
               <div className="flex flex-wrap gap-2">
-                {analysis.weaknesses.length > 0 ? (
+                {analysis.weaknesses && analysis.weaknesses.length > 0 ? (
                   analysis.weaknesses.map((w, i) => (
                     <span key={i} className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 text-sm font-medium border border-rose-100">
                       {w}

@@ -72,7 +72,7 @@ export const BrandCard: React.FC<BrandCardProps> = ({ ranking, analysis, onClick
         {analysis && (
           <div className="mt-2 space-y-3">
             {/* 优势 */}
-            {analysis.strengths.length > 0 && (
+            {analysis.strengths && analysis.strengths.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {analysis.strengths.slice(0, 3).map((strength, index) => (
                   <span 
@@ -89,7 +89,7 @@ export const BrandCard: React.FC<BrandCardProps> = ({ ranking, analysis, onClick
             )}
             
             {/* 劣势 (仅显示一个关键劣势，避免负面情绪过重) */}
-            {analysis.weaknesses.length > 0 && (
+            {analysis.weaknesses && analysis.weaknesses.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {analysis.weaknesses.slice(0, 1).map((weakness, index) => (
                   <span 

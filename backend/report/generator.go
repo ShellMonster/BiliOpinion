@@ -6,6 +6,7 @@ import (
 	"bilibili-analyzer/backend/models"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -236,6 +237,8 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 		allBrandNames = append(allBrandNames, r.Brand)
 	}
 
+	log.Printf("[Report] Input.Videos count: %d", len(input.Videos))
+
 	videoSources := make([]VideoSource, len(input.Videos))
 	for i, v := range input.Videos {
 		videoSources[i] = VideoSource{
@@ -249,9 +252,12 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 
 	// 计算整体情感分布：仅按评分阈值划分，不做任何AI情感分析
 	sentimentDistribution := calculateSentiment(input.AnalysisResults)
+	log.Printf("[GenerateReport] SentimentDistribution: %+v", sentimentDistribution)
 
 	// 提取关键词词频：用于词云（简单分词 + 停用词/单字过滤）
 	keywordFrequency := extractKeywords(input.AnalysisResults)
+	log.Printf("[GenerateReport] KeywordFrequency count: %d", len(keywordFrequency))
+	log.Printf("[GenerateReport] VideoSources count: %d", len(videoSources))
 
 	return &ReportData{
 		Category:              input.Category,

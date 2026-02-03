@@ -391,6 +391,8 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 
 	wg.Wait()
 
+	log.Printf("[Scraper] Returning result with %d videos", len(result.Videos))
+
 	result.Stats.Duration = time.Since(startTime)
 	log.Printf("[Scraper] ScrapeByVideos completed: %d videos, %d comments, duration: %v",
 		result.Stats.TotalVideos, result.Stats.TotalComments, result.Stats.Duration)

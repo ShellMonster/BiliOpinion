@@ -224,6 +224,8 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 		Videos: scrapeResult.Videos,
 	}
 
+	log.Printf("[Executor] scrapeResult.Videos count: %d", len(scrapeResult.Videos))
+
 	reportData, err := report.GenerateReportWithInput(reportInput)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)
@@ -612,10 +614,21 @@ func (e *Executor) analyzeComments(
 
 // saveReport 保存报告到数据库
 func (e *Executor) saveReport(historyID uint, reportData *report.ReportData) (uint, error) {
+	// 添加调试日志：检查字段是否存在
+	log.Printf("[saveReport] VideoSources count: %d", len(reportData.VideoSources))
+	log.Printf("[saveReport] SentimentDistribution: %+v", reportData.SentimentDistribution)
+	log.Printf("[saveReport] KeywordFrequency count: %d", len(reportData.KeywordFrequency))
+
 	data, err := json.Marshal(reportData)
 	if err != nil {
 		return 0, err
 	}
+
+	// 添加调试日志：检查序列化后的JSON
+	log.Printf("[saveReport] Serialized JSON length: %d", len(data))
+	log.Printf("[saveReport] Contains video_sources: %v", strings.Contains(string(data), "video_sources"))
+	log.Printf("[saveReport] Contains sentiment_distribution: %v", strings.Contains(string(data), "sentiment_distribution"))
+	log.Printf("[saveReport] Contains keyword_frequency: %v", strings.Contains(string(data), "keyword_frequency"))
 
 	reportRecord := &models.Report{
 		HistoryID:  historyID,

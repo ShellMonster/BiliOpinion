@@ -34,6 +34,36 @@ B站评论区恰好是一个被忽视的宝藏：
 
 ---
 
+## 演示截图
+
+### 界面预览
+
+<table>
+<tr>
+<td><img src="screenshots/demo_1.png" alt="首页输入界面" width="100%"/></td>
+<td><img src="screenshots/demo_4.png" alt="分析报告界面" width="100%"/></td>
+</tr>
+<tr>
+<td align="center"><strong>首页输入界面</strong></td>
+<td align="center"><strong>分析报告界面</strong></td>
+</tr>
+</table>
+
+<details>
+<summary><strong>📸 点击查看更多演示截图</strong></summary>
+
+#### AI 解析确认
+
+<img src="screenshots/demo_2.png" alt="AI解析确认界面" width="100%"/>
+
+#### 分析进度跟踪
+
+<img src="screenshots/demo_3.png" alt="实时进度跟踪界面" width="100%"/>
+
+</details>
+
+---
+
 ## 系统架构
 
 ```mermaid

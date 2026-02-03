@@ -145,343 +145,6 @@ graph LR
 
 ---
 
-## 评分体系与策略
-
-### 评分标准
-
-```mermaid
-graph LR
-    subgraph "评分标准 1-10分制"
-        POOR["差评 1-3分<br/>负面评价"]
-        FAIR["一般 4-5分<br/>中性评价"]
-        GOOD["较好 6-7分<br/>正面评价"]
-        EXCELLENT["优秀 8-10分<br/>强烈好评"]
-    end
-
-    POOR --> FAIR --> GOOD --> EXCELLENT
-
-    style POOR fill:#ffcdd2
-    style FAIR fill:#fff9c4
-    style GOOD fill:#c8e6c9
-    style EXCELLENT fill:#81c784
-```
-
-### 评分策略流程
-
-```mermaid
-graph TD
-    RAW(["AI 分析原始数据"]) --> PARSE["解析评分结果"]
-
-    PARSE --> SCORES["提取各维度得分"]
-    SCORES --> BRAND["提取品牌和型号"]
-
-    BRAND --> UNKNOWN{"品牌是否未知?"}
-    UNKNOWN -->|"是"| IDENTIFY["AI 识别品牌"]
-    UNKNOWN -->|"否"| CLEAN["清洗品牌名称"]
-    IDENTIFY --> CLEAN
-
-    CLEAN --> NORMALIZE["归一化处理"]
-    NORMALIZE --> AGGREGATE["聚合分析结果"]
-
-    subgraph "评分计算"
-        AGGREGATE --> AVG["计算平均分<br/>总分数 / 有效维度数"]
-        AVG --> WEIGHT["权重处理<br/>各维度均等权重"]
-    end
-
-    subgraph "优劣势判断"
-        WEIGHT --> STRENGTH{"得分 >= 8.0?"}
-        STRENGTH -->|"是"| ADD_STR["加入优势列表"]
-        STRENGTH -->|"否"| WEAK{"得分 < 6.0?"}
-        WEAK -->|"是"| ADD_WEAK["加入劣势列表"]
-        WEAK -->|"否"| SKIP["跳过"]
-    end
-
-    subgraph "情感分类"
-        WEIGHT --> SENTIMENT["情感分布统计"]
-        SENTIMENT --> POS{"平均分 >= 8.0?"}
-        POS -->|"是"| GOOD_CNT["好评计数 +1"]
-        POS -->|"否"| NEU{"平均分 5.0-8.0?"}
-        NEU -->|"是"| NEU_CNT["中性计数 +1"]
-        NEU -->|"否"| BAD_CNT["差评计数 +1"]
-    end
-
-    subgraph "典型评论筛选"
-        WEIGHT --> TYPICAL["筛选典型评论"]
-        TYPICAL --> TOP{"平均分 >= 8.0?"}
-        TOP -->|"是"| TOP_LIST["加入好评列表<br/>取前3条"]
-        TOP -->|"否"| BOTTOM{"平均分 < 5.0?"}
-        BOTTOM -->|"是"| BAD_LIST["加入差评列表<br/>取前3条"]
-        BOTTOM -->|"否"| IGNORE["忽略"]
-    end
-
-    subgraph "排名计算"
-        ADD_STR --> RANK["计算品牌综合得分"]
-        ADD_WEAK --> RANK
-        SKIP --> RANK
-        GOOD_CNT --> RANK
-        NEU_CNT --> RANK
-        BAD_CNT --> RANK
-        TOP_LIST --> RANK
-        BAD_LIST --> RANK
-        IGNORE --> RANK
-
-        RANK --> SORT["按综合得分排序"]
-        SORT --> MODEL_RANK["计算型号排名<br/>归一化型号名合并"]
-    end
-
-    MODEL_RANK --> FINAL(["生成最终报告"])
-
-    style RAW fill:#e1f5fe
-    style FINAL fill:#e8f5e9
-    style ADD_STR fill:#c8e6c9
-    style ADD_WEAK fill:#ffcdd2
-    style GOOD_CNT fill:#c8e6c9
-    style BAD_CNT fill:#ffcdd2
-```
-
-### 策略规则详解
-
-#### 1. 优劣势判断规则
-
-| 得分范围 | 分类 | 说明 |
-|----------|------|------|
-| >= 8.0 分 | 优势 | 该维度表现优秀 |
-| 6.0 - 7.9 分 | 一般 | 该维度表现正常 |
-| < 6.0 分 | 劣势 | 该维度存在不足 |
-
-#### 2. 情感分类规则
-
-| 平均得分 | 情感分类 | 说明 |
-|----------|----------|------|
-| >= 8.0 分 | 好评 | 正面评价 |
-| 5.0 - 7.9 分 | 中性 | 一般评价 |
-| < 5.0 分 | 差评 | 负面评价 |
-
-#### 3. 典型评论筛选规则
-
-| 类型 | 条件 | 数量 |
-|------|------|------|
-| 典型好评 | 平均得分 >= 8.0 | 每品牌前 3 条 |
-| 典型差评 | 平均得分 < 5.0 | 每品牌前 3 条 |
-
-#### 4. 品牌排名计算
-
-```mermaid
-graph TD
-    INPUT(["输入品牌各维度得分"]) --> CALC["计算综合得分"]
-    CALC --> FORMULA["公式: 综合得分 = 所有维度得分之和 / 有效维度数"]
-    FORMULA --> SORT["按综合得分降序排序"]
-    SORT --> RANK["分配排名"]
-    RANK --> OUTPUT(["输出品牌排名"])
-
-    INPUT2(["输入型号各维度得分"]) --> MODEL_KEY["归一化型号key<br/>品牌小写|型号去空格小写"]
-    MODEL_KEY --> MERGE["合并相同型号<br/>不同写法"]
-    MERGE --> MODEL_CALC["计算型号综合得分"]
-    MODEL_CALC --> MODEL_SORT["按综合得分降序排序"]
-    MODEL_SORT --> MODEL_RANK["分配排名"]
-    MODEL_RANK --> OUTPUT2(["输出型号排名"])
-
-    style INPUT fill:#e1f5fe
-    style OUTPUT fill:#e8f5e9
-    style INPUT2 fill:#e1f5fe
-    style OUTPUT2 fill:#e8f5e9
-```
-
-#### 5. 型号归一化规则
-
-为合并相同型号的不同写法，系统使用归一化 key 进行聚合：
-
-```mermaid
-graph LR
-    INPUT1["戴森 V12"] --> KEY1["dyson|v12"]
-    INPUT2["戴森V12"] --> KEY2["dyson|v12"]
-    INPUT3["戴森 V-12"] --> KEY3["dyson|v12"]
-
-    KEY1 --> MERGE["合并为一条记录"]
-    KEY2 --> MERGE
-    KEY3 --> MERGE
-
-    MERGE --> OUTPUT["戴森 V12<br/>显示名称: 首个出现的写法"]
-
-    style INPUT1 fill:#e3f2fd
-    style INPUT2 fill:#e3f2fd
-    style INPUT3 fill:#e3f2fd
-    style OUTPUT fill:#c8e6c9
-```
-
-**归一化规则**：
-- 品牌名转小写
-- 型号名转小写，移除空格、连字符、下划线
-- 格式：`品牌小写|型号处理后`
-
-#### 5. 型号归一化规则
-
-为合并相同型号的不同写法，系统使用归一化 key 进行聚合：
-
-```mermaid
-graph LR
-    INPUT1["戴森 V12"] --> KEY1["dyson|v12"]
-    INPUT2["戴森V12"] --> KEY2["dyson|v12"]
-    INPUT3["戴森 V-12"] --> KEY3["dyson|v12"]
-
-    KEY1 --> MERGE["合并为一条记录"]
-    KEY2 --> MERGE
-    KEY3 --> MERGE
-
-    MERGE --> OUTPUT["戴森 V12<br/>显示名称: 首个出现的写法"]
-
-    style INPUT1 fill:#e3f2fd
-    style INPUT2 fill:#e3f2fd
-    style INPUT3 fill:#e3f2fd
-    style OUTPUT fill:#c8e6c9
-```
-
-**归一化规则**：
-- 品牌名转小写
-- 型号名转小写，移除空格、连字符、下划线
-- 格式：`品牌小写|型号处理后`
-
----
-
-### 评论质量评分策略
-
-```mermaid
-graph TD
-    COMMENT(["原始评论数据"]) --> VALID["有效性检查"]
-
-    subgraph "评论过滤规则"
-        VALID --> MIN_LEN{"字符数 >= 10?"}
-        MIN_LEN -->|"否"| FILTER_OUT1["过滤掉"]
-        MIN_LEN -->|"是"| EMOJI{"移除表情符号后<br/>字符数 >= 10?"}
-        EMOJI -->|"否"| FILTER_OUT2["过滤掉"]
-        EMOJI -->|"是"| PASS["通过过滤"]
-    end
-
-    subgraph "质量评分计算 0-100分"
-        PASS --> POP["热度分 0-40分"]
-        POP --> LIKE["点赞数分<br/>min(点赞数/100, 20)"]
-        POP --> REPLY["回复数分<br/>min(回复数/10, 20)"]
-
-        PASS --> LEN["长度分 0-30分<br/>min(字符数/10, 30)"]
-
-        PASS --> KW["关键词匹配 0-30分<br/>每个关键词+10分,最多30分"]
-    end
-
-    LIKE --> SUM["计算总分 = 热度 + 长度 + 关键词"]
-    REPLY --> SUM
-    LEN --> SUM
-    KW --> SUM
-
-    SUM --> SORT["按质量分降序排序"]
-
-    subgraph "稳定排序规则"
-        SORT --> SAME_SCORE{"分数相同?"}
-        SAME_SCORE -->|"是"| TIME["按发布时间倒序"]
-        SAME_SCORE -->|"否"| NEXT["直接排序"]
-        TIME --> TIME_SAME{"时间也相同?"}
-        TIME_SAME -->|"是"| LIKE_CMP["按点赞数倒序"]
-        TIME_SAME -->|"否"| NEXT
-        LIKE_CMP --> NEXT
-    end
-
-    NEXT --> LIMIT["截取前 N 条"]
-    LIMIT --> OUTPUT(["输出高质量评论列表"])
-
-    style COMMENT fill:#e1f5fe
-    style OUTPUT fill:#e8f5e9
-    style FILTER_OUT1 fill:#ffcdd2
-    style FILTER_OUT2 fill:#ffcdd2
-    style PASS fill:#c8e6c9
-```
-
-**评论质量评分规则**：
-
-| 评分项 | 权重 | 计算公式 | 最高分 |
-|--------|------|----------|--------|
-| 热度分 | 40% | min(点赞数/100, 20) + min(回复数/10, 20) | 40 分 |
-| 长度分 | 30% | min(字符数/10, 30) | 30 分 |
-| 关键词分 | 30% | 每匹配一个关键词 +10 分 | 30 分 |
-
-**过滤规则**：
-- 最小字符数：10 个字符（按 rune 计数）
-- 移除表情和符号后，可读内容仍需 >= 10 个字符
-- 过滤纯表情/符号评论
-
-**排序规则**（确定性稳定排序）：
-1. 质量分降序
-2. 发布时间倒序（新评论优先）
-3. 点赞数倒序
-4. 评论 ID 倒序
-
----
-
-### 时间相关策略
-
-```mermaid
-graph TD
-    subgraph "视频时间过滤"
-        VIDEO(["搜索到的视频"]) --> FILTER_DATE{"配置时间范围<br/>大于0?"}
-        FILTER_DATE -->|"否"| KEEP1["保留所有视频"]
-        FILTER_DATE -->|"是"| CALC_CUTOFF["计算截止时间<br/>当前时间 - N个月"]
-        CALC_CUTOFF --> CHECK_PUB{"发布时间<br/>> 截止时间?"}
-        CHECK_PUB -->|"是"| KEEP1
-        CHECK_PUB -->|"否"| FILTER_OUT["过滤掉旧视频"]
-    end
-
-    subgraph "视频时长过滤"
-        KEEP1 --> FILTER_DUR{"配置最小时长<br/>大于0?"}
-        FILTER_DUR -->|"否"| KEEP2["保留所有视频"]
-        FILTER_DUR -->|"是"| PARSE_DUR["解析时长字符串<br/>mm:ss 或 hh:mm:ss"]
-        PARSE_DUR --> CHECK_DUR{"时长秒数<br/>>= 最小时长?"}
-        CHECK_DUR -->|"是"| KEEP2
-        CHECK_DUR -->|"否"| FILTER_OUT2["过滤掉短视频"]
-    end
-
-    subgraph "评论排序"
-        KEEP2 --> SORT_COMMENT["评论排序"]
-        SORT_COMMENT --> TIME_ORDER["按发布时间倒序<br/>新评论优先"]
-    end
-
-    subgraph "任务超时检测"
-        TASK(["运行中的任务"]) --> CHECK_HB{"最后心跳时间<br/>超过1小时?"}
-        CHECK_HB -->|"是"| MARK_FAIL["标记为失败"]
-        CHECK_HB -->|"否"| RUNNING["继续运行"]
-    end
-
-    subgraph "数据清理策略"
-        RAW(["原始评论数据"]) --> CHECK_CREATE{"抓取时间<br/>超过3天?"}
-        CHECK_CREATE -->|"是"| DELETE["自动删除"]
-        CHECK_CREATE -->|"否"| KEEP_RAW["保留数据"]
-    end
-
-    TIME_ORDER --> SCRAPE(["开始抓取评论"])
-
-    style VIDEO fill:#e1f5fe
-    style SCRAPE fill:#e8f5e9
-    style FILTER_OUT fill:#ffcdd2
-    style FILTER_OUT2 fill:#ffcdd2
-    style DELETE fill:#ffcdd2
-    style MARK_FAIL fill:#ffcdd2
-    style KEEP1 fill:#c8e6c9
-    style KEEP2 fill:#c8e6c9
-    style KEEP_RAW fill:#c8e6c9
-    style RUNNING fill:#c8e6c9
-```
-
-**时间相关策略详解**：
-
-| 策略类型 | 配置项 | 默认值 | 说明 |
-|----------|--------|--------|------|
-| 视频时间过滤 | VideoDateRangeMonths | 0（不限制） | 只保留最近 N 个月内发布的视频 |
-| 视频时长过滤 | MinVideoDuration | 30 秒 | 过滤掉时长不足的短视频 |
-| 评论排序 | - | 按发布时间倒序 | 新评论优先，相同时间按点赞数 |
-| 任务超时 | - | 1 小时无心跳 | 超过 1 小时无心跳则标记失败 |
-| 数据清理 | - | 3 天 | 原始评论数据 3 天后自动删除 |
-
-**WBI 密钥缓存**：B站 API 的 WBI 签名密钥缓存 1 小时，避免频繁获取
-
----
-
 ## 技术栈
 
 ### 后端
@@ -591,8 +254,8 @@ B站商品评论解析/
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/your-repo/bilibili-analyzer.git
-cd bilibili-analyzer
+git clone https://github.com/ShellMonster/BiliOpinion.git
+cd B站商品评论解析
 ```
 
 2. **安装后端依赖**
@@ -770,9 +433,368 @@ data: {"status":"completed","message":"分析完成！共分析50个视频，500
 
 ---
 
-## 开发进度
+## Agent 调用流程
 
-详细开发进度请查看 [开发进度.md](./开发进度.md) 文件。
+```mermaid
+graph LR
+    subgraph "1. 关键词解析 Agent"
+        AI1["AI 关键词解析"]
+        AI1 --> T1["理解用户需求"]
+        AI1 --> T2["识别商品类型"]
+        AI1 --> T3["推荐主流品牌"]
+        AI1 --> T4["设计评价维度"]
+        AI1 --> T5["生成搜索关键词"]
+    end
+
+    subgraph "2. 评论分析 Agent"
+        AI2["AI 评论分析"]
+        AI2 --> A1["提取品牌和型号"]
+        AI2 --> A2["各维度打分1-10"]
+        AI2 --> A3["识别情感倾向"]
+        AI2 --> A4["判断优劣势"]
+    end
+
+    subgraph "3. 品牌识别 Agent"
+        AI3["AI 品牌识别"]
+        AI3 --> B1["识别未知品牌"]
+        AI3 --> B2["型号归一化"]
+        AI3 --> B3["品牌别名映射"]
+    end
+
+    subgraph "4. 购买建议 Agent"
+        AI4["AI 购买建议"]
+        AI4 --> R1["分析品牌优劣势"]
+        AI4 --> R2["对比型号表现"]
+        AI4 --> R3["生成推荐理由"]
+        AI4 --> R4["给出购买建议"]
+    end
+
+    USER(["用户输入"]) --> AI1
+    AI1 --> DATA["数据采集<br/>搜索+抓取"]
+    DATA --> AI2
+    AI2 --> AI3
+    AI3 --> AI4
+    AI4 --> OUT(["输出报告"])
+
+    style AI1 fill:#fff3e0
+    style AI2 fill:#fff3e0
+    style AI3 fill:#fff3e0
+    style AI4 fill:#fff3e0
+    style USER fill:#e1f5fe
+    style OUT fill:#e8f5e9
+    style DATA fill:#e3f2fd
+```
+
+---
+
+## 评分体系与策略
+
+<details>
+<summary><strong>📖 点击展开查看详细的评分策略和算法逻辑</strong></summary>
+
+### 评分标准
+
+```mermaid
+graph LR
+    subgraph "评分标准 1-10分制"
+        POOR["差评 1-3分<br/>负面评价"]
+        FAIR["一般 4-5分<br/>中性评价"]
+        GOOD["较好 6-7分<br/>正面评价"]
+        EXCELLENT["优秀 8-10分<br/>强烈好评"]
+    end
+
+    POOR --> FAIR --> GOOD --> EXCELLENT
+
+    style POOR fill:#ffcdd2
+    style FAIR fill:#fff9c4
+    style GOOD fill:#c8e6c9
+    style EXCELLENT fill:#81c784
+```
+
+### 评分策略流程
+
+```mermaid
+graph TD
+    RAW(["AI 分析原始数据"]) --> PARSE["解析评分结果"]
+
+    PARSE --> SCORES["提取各维度得分"]
+    SCORES --> BRAND["提取品牌和型号"]
+
+    BRAND --> UNKNOWN{"品牌是否未知?"}
+    UNKNOWN -->|"是"| IDENTIFY["AI 识别品牌"]
+    UNKNOWN -->|"否"| CLEAN["清洗品牌名称"]
+    IDENTIFY --> CLEAN
+
+    CLEAN --> NORMALIZE["归一化处理"]
+    NORMALIZE --> AGGREGATE["聚合分析结果"]
+
+    subgraph "评分计算"
+        AGGREGATE --> AVG["计算平均分<br/>总分数 / 有效维度数"]
+        AVG --> WEIGHT["权重处理<br/>各维度均等权重"]
+    end
+
+    subgraph "优劣势判断"
+        WEIGHT --> STRENGTH{"得分 >= 8.0?"}
+        STRENGTH -->|"是"| ADD_STR["加入优势列表"]
+        STRENGTH -->|"否"| WEAK{"得分 < 6.0?"}
+        WEAK -->|"是"| ADD_WEAK["加入劣势列表"]
+        WEAK -->|"否"| SKIP["跳过"]
+    end
+
+    subgraph "情感分类"
+        WEIGHT --> SENTIMENT["情感分布统计"]
+        SENTIMENT --> POS{"平均分 >= 8.0?"}
+        POS -->|"是"| GOOD_CNT["好评计数 +1"]
+        POS -->|"否"| NEU{"平均分 5.0-8.0?"}
+        NEU -->|"是"| NEU_CNT["中性计数 +1"]
+        NEU -->|"否"| BAD_CNT["差评计数 +1"]
+    end
+
+    subgraph "典型评论筛选"
+        WEIGHT --> TYPICAL["筛选典型评论"]
+        TYPICAL --> TOP{"平均分 >= 8.0?"}
+        TOP -->|"是"| TOP_LIST["加入好评列表<br/>取前3条"]
+        TOP -->|"否"| BOTTOM{"平均分 < 5.0?"}
+        BOTTOM -->|"是"| BAD_LIST["加入差评列表<br/>取前3条"]
+        BOTTOM -->|"否"| IGNORE["忽略"]
+    end
+
+    subgraph "排名计算"
+        ADD_STR --> RANK["计算品牌综合得分"]
+        ADD_WEAK --> RANK
+        SKIP --> RANK
+        GOOD_CNT --> RANK
+        NEU_CNT --> RANK
+        BAD_CNT --> RANK
+        TOP_LIST --> RANK
+        BAD_LIST --> RANK
+        IGNORE --> RANK
+
+        RANK --> SORT["按综合得分排序"]
+        SORT --> MODEL_RANK["计算型号排名<br/>归一化型号名合并"]
+    end
+
+    MODEL_RANK --> FINAL(["生成最终报告"])
+
+    style RAW fill:#e1f5fe
+    style FINAL fill:#e8f5e9
+    style ADD_STR fill:#c8e6c9
+    style ADD_WEAK fill:#ffcdd2
+    style GOOD_CNT fill:#c8e6c9
+    style BAD_CNT fill:#ffcdd2
+```
+
+### 策略规则详解
+
+#### 1. 优劣势判断规则
+
+| 得分范围 | 分类 | 说明 |
+|----------|------|------|
+| >= 8.0 分 | 优势 | 该维度表现优秀 |
+| 6.0 - 7.9 分 | 一般 | 该维度表现正常 |
+| < 6.0 分 | 劣势 | 该维度存在不足 |
+
+#### 2. 情感分类规则
+
+| 平均得分 | 情感分类 | 说明 |
+|----------|----------|------|
+| >= 8.0 分 | 好评 | 正面评价 |
+| 5.0 - 7.9 分 | 中性 | 一般评价 |
+| < 5.0 分 | 差评 | 负面评价 |
+
+#### 3. 典型评论筛选规则
+
+| 类型 | 条件 | 数量 |
+|------|------|------|
+| 典型好评 | 平均得分 >= 8.0 | 每品牌前 3 条 |
+| 典型差评 | 平均得分 < 5.0 | 每品牌前 3 条 |
+
+#### 4. 品牌排名计算
+
+```mermaid
+graph TD
+    INPUT(["输入品牌各维度得分"]) --> CALC["计算综合得分"]
+    CALC --> FORMULA["公式: 综合得分 = 所有维度得分之和 / 有效维度数"]
+    FORMULA --> SORT["按综合得分降序排序"]
+    SORT --> RANK["分配排名"]
+    RANK --> OUTPUT(["输出品牌排名"])
+
+    INPUT2(["输入型号各维度得分"]) --> MODEL_KEY["归一化型号key<br/>品牌小写|型号去空格小写"]
+    MODEL_KEY --> MERGE["合并相同型号<br/>不同写法"]
+    MERGE --> MODEL_CALC["计算型号综合得分"]
+    MODEL_CALC --> MODEL_SORT["按综合得分降序排序"]
+    MODEL_SORT --> MODEL_RANK["分配排名"]
+    MODEL_RANK --> OUTPUT2(["输出型号排名"])
+
+    style INPUT fill:#e1f5fe
+    style OUTPUT fill:#e8f5e9
+    style INPUT2 fill:#e1f5fe
+    style OUTPUT2 fill:#e8f5e9
+```
+
+#### 5. 型号归一化规则
+
+为合并相同型号的不同写法，系统使用归一化 key 进行聚合：
+
+```mermaid
+graph LR
+    INPUT1["戴森 V12"] --> KEY1["dyson|v12"]
+    INPUT2["戴森V12"] --> KEY2["dyson|v12"]
+    INPUT3["戴森 V-12"] --> KEY3["dyson|v12"]
+
+    KEY1 --> MERGE["合并为一条记录"]
+    KEY2 --> MERGE
+    KEY3 --> MERGE
+
+    MERGE --> OUTPUT["戴森 V12<br/>显示名称: 首个出现的写法"]
+
+    style INPUT1 fill:#e3f2fd
+    style INPUT2 fill:#e3f2fd
+    style INPUT3 fill:#e3f2fd
+    style OUTPUT fill:#c8e6c9
+```
+
+**归一化规则**：
+- 品牌名转小写
+- 型号名转小写，移除空格、连字符、下划线
+- 格式：`品牌小写|型号处理后`
+
+### 评论质量评分策略
+
+```mermaid
+graph TD
+    COMMENT(["原始评论数据"]) --> VALID["有效性检查"]
+
+    subgraph "评论过滤规则"
+        VALID --> MIN_LEN{"字符数 >= 10?"}
+        MIN_LEN -->|"否"| FILTER_OUT1["过滤掉"]
+        MIN_LEN -->|"是"| EMOJI{"移除表情符号后<br/>字符数 >= 10?"}
+        EMOJI -->|"否"| FILTER_OUT2["过滤掉"]
+        EMOJI -->|"是"| PASS["通过过滤"]
+    end
+
+    subgraph "质量评分计算 0-100分"
+        PASS --> POP["热度分 0-40分"]
+        POP --> LIKE["点赞数分<br/>min(点赞数/100, 20)"]
+        POP --> REPLY["回复数分<br/>min(回复数/10, 20)"]
+
+        PASS --> LEN["长度分 0-30分<br/>min(字符数/10, 30)"]
+
+        PASS --> KW["关键词匹配 0-30分<br/>每个关键词+10分,最多30分"]
+    end
+
+    LIKE --> SUM["计算总分 = 热度 + 长度 + 关键词"]
+    REPLY --> SUM
+    LEN --> SUM
+    KW --> SUM
+
+    SUM --> SORT["按质量分降序排序"]
+
+    subgraph "稳定排序规则"
+        SORT --> SAME_SCORE{"分数相同?"}
+        SAME_SCORE -->|"是"| TIME["按发布时间倒序"]
+        SAME_SCORE -->|"否"| NEXT["直接排序"]
+        TIME --> TIME_SAME{"时间也相同?"}
+        TIME_SAME -->|"是"| LIKE_CMP["按点赞数倒序"]
+        TIME_SAME -->|"否"| NEXT
+        LIKE_CMP --> NEXT
+    end
+
+    NEXT --> LIMIT["截取前 N 条"]
+    LIMIT --> OUTPUT(["输出高质量评论列表"])
+
+    style COMMENT fill:#e1f5fe
+    style OUTPUT fill:#e8f5e9
+    style FILTER_OUT1 fill:#ffcdd2
+    style FILTER_OUT2 fill:#ffcdd2
+    style PASS fill:#c8e6c9
+```
+
+**评论质量评分规则**：
+
+| 评分项 | 权重 | 计算公式 | 最高分 |
+|--------|------|----------|--------|
+| 热度分 | 40% | min(点赞数/100, 20) + min(回复数/10, 20) | 40 分 |
+| 长度分 | 30% | min(字符数/10, 30) | 30 分 |
+| 关键词分 | 30% | 每匹配一个关键词 +10 分 | 30 分 |
+
+**过滤规则**：
+- 最小字符数：10 个字符（按 rune 计数）
+- 移除表情和符号后，可读内容仍需 >= 10 个字符
+- 过滤纯表情/符号评论
+
+**排序规则**（确定性稳定排序）：
+1. 质量分降序
+2. 发布时间倒序（新评论优先）
+3. 点赞数倒序
+4. 评论 ID 倒序
+
+### 时间相关策略
+
+```mermaid
+graph TD
+    subgraph "视频时间过滤"
+        VIDEO(["搜索到的视频"]) --> FILTER_DATE{"配置时间范围<br/>大于0?"}
+        FILTER_DATE -->|"否"| KEEP1["保留所有视频"]
+        FILTER_DATE -->|"是"| CALC_CUTOFF["计算截止时间<br/>当前时间 - N个月"]
+        CALC_CUTOFF --> CHECK_PUB{"发布时间<br/>> 截止时间?"}
+        CHECK_PUB -->|"是"| KEEP1
+        CHECK_PUB -->|"否"| FILTER_OUT["过滤掉旧视频"]
+    end
+
+    subgraph "视频时长过滤"
+        KEEP1 --> FILTER_DUR{"配置最小时长<br/>大于0?"}
+        FILTER_DUR -->|"否"| KEEP2["保留所有视频"]
+        FILTER_DUR -->|"是"| PARSE_DUR["解析时长字符串<br/>mm:ss 或 hh:mm:ss"]
+        PARSE_DUR --> CHECK_DUR{"时长秒数<br/>>= 最小时长?"}
+        CHECK_DUR -->|"是"| KEEP2
+        CHECK_DUR -->|"否"| FILTER_OUT2["过滤掉短视频"]
+    end
+
+    subgraph "评论排序"
+        KEEP2 --> SORT_COMMENT["评论排序"]
+        SORT_COMMENT --> TIME_ORDER["按发布时间倒序<br/>新评论优先"]
+    end
+
+    subgraph "任务超时检测"
+        TASK(["运行中的任务"]) --> CHECK_HB{"最后心跳时间<br/>超过1小时?"}
+        CHECK_HB -->|"是"| MARK_FAIL["标记为失败"]
+        CHECK_HB -->|"否"| RUNNING["继续运行"]
+    end
+
+    subgraph "数据清理策略"
+        RAW(["原始评论数据"]) --> CHECK_CREATE{"抓取时间<br/>超过3天?"}
+        CHECK_CREATE -->|"是"| DELETE["自动删除"]
+        CHECK_CREATE -->|"否"| KEEP_RAW["保留数据"]
+    end
+
+    TIME_ORDER --> SCRAPE(["开始抓取评论"])
+
+    style VIDEO fill:#e1f5fe
+    style SCRAPE fill:#e8f5e9
+    style FILTER_OUT fill:#ffcdd2
+    style FILTER_OUT2 fill:#ffcdd2
+    style DELETE fill:#ffcdd2
+    style MARK_FAIL fill:#ffcdd2
+    style KEEP1 fill:#c8e6c9
+    style KEEP2 fill:#c8e6c9
+    style KEEP_RAW fill:#c8e6c9
+    style RUNNING fill:#c8e6c9
+```
+
+**时间相关策略详解**：
+
+| 策略类型 | 配置项 | 默认值 | 说明 |
+|----------|--------|--------|------|
+| 视频时间过滤 | VideoDateRangeMonths | 0（不限制） | 只保留最近 N 个月内发布的视频 |
+| 视频时长过滤 | MinVideoDuration | 30 秒 | 过滤掉时长不足的短视频 |
+| 评论排序 | - | 按发布时间倒序 | 新评论优先，相同时间按点赞数 |
+| 任务超时 | - | 1 小时无心跳 | 超过 1 小时无心跳则标记失败 |
+| 数据清理 | - | 3 天 | 原始评论数据 3 天后自动删除 |
+
+**WBI 密钥缓存**：B站 API 的 WBI 签名密钥缓存 1 小时，避免频繁获取
+
+</details>
 
 ---
 

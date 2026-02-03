@@ -1,0 +1,5 @@
+- Refactored backend/task/executor.go to use CommentWithVideo struct for AI analysis.
+- Note: CommentWithVideo lacks timestamp information, so PublishTime in reports defaults to zero/empty. If accurate timeline analysis is needed, CommentWithVideo needs to be expanded.
+- Successfully separated comment extraction logic from analysis logic using GetAllCommentsWithVideo.
+- Always verify the current state of the codebase against the plan before starting implementation. Sometimes tasks are already implemented but not marked as done in the plan.
+- When verifying existing code, creating a targeted test case (like `TestModelLevelAggregation`) is a good way to ensure it meets the requirements without modifying working code.

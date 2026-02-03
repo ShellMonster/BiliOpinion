@@ -18,9 +18,8 @@ import { BrandCard } from '../components/Report/BrandCard'
 import { DimensionFilter } from '../components/Report/DimensionFilter'
 import { BrandDetailModal } from '../components/Report/BrandDetailModal'
 import { CompetitorCompare } from '../components/Report/CompetitorCompare'
-import { ModelAnalysis } from '../components/Report/ModelAnalysis'
 import { DecisionTree } from '../components/Report/DecisionTree'
-import type { SentimentStats } from '../types/report'
+import type { SentimentStats, ModelRanking } from '../types/report'
 
 type TabType = 'overview' | 'charts' | 'summary'
 
@@ -244,7 +243,68 @@ const Report = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {data.rankings?.map(r => <BrandCard key={r.brand} ranking={r} analysis={data.brand_analysis?.[r.brand]} onClick={() => setSelectedBrand(r.brand)} />)}
             </div>
-            <ModelAnalysis modelRankings={data.model_rankings || []} dimensions={data.dimensions} />
+            
+            {/* 型号排名 */}
+            {data.model_rankings && data.model_rankings.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-xl font-bold text-gray-800">🏆 型号排名</h2>
+                  <p className="text-sm text-gray-500 mt-1">基于 AI 分析的具体型号表现</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">排名</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">型号</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">品牌</th>
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">综合得分</th>
+                        {data.dimensions.map(dim => (
+                          <th key={dim.name} className="px-4 py-3 text-center text-sm font-medium text-gray-600">{dim.name}</th>
+                        ))}
+                        <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">评论数</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {data.model_rankings.map((model: ModelRanking) => (
+                        <tr key={`${model.brand}-${model.model}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                              model.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                              model.rank === 2 ? 'bg-gray-100 text-gray-700' :
+                              model.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                              'bg-blue-50 text-blue-600'
+                            }`}>
+                              {model.rank}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{model.model}</td>
+                          <td className="px-4 py-3 text-gray-600">{model.brand}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-sm font-medium ${
+                              model.overall_score >= 8 ? 'bg-green-100 text-green-700' :
+                              model.overall_score >= 6 ? 'bg-blue-100 text-blue-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {model.overall_score.toFixed(1)}
+                            </span>
+                          </td>
+                          {data.dimensions.map(dim => {
+                            const score = model.scores?.[dim.name]
+                            return (
+                              <td key={dim.name} className="px-4 py-3 text-center text-sm text-gray-600">
+                                {score !== undefined ? score.toFixed(1) : '-'}
+                              </td>
+                            )
+                          })}
+                          <td className="px-4 py-3 text-center text-sm text-gray-500">{model.comment_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

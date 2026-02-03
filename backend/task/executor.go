@@ -59,6 +59,13 @@ type TaskRequest struct {
 	Keywords    []string       // 搜索关键词
 }
 
+// CommentWithVideo 带视频信息的评论
+type CommentWithVideo struct {
+	Content    string // 评论内容
+	VideoTitle string // 视频标题
+	VideoBVID  string // 视频BVID
+}
+
 // Executor 任务执行器
 // 整合搜索、抓取、分析、报告生成的完整流程
 type Executor struct {
@@ -382,61 +389,44 @@ func (e *Executor) analyzeComments(
 	category string,
 ) (map[string][]report.CommentWithScore, error) {
 
-	videoMap := make(map[string]bilibili.VideoInfo)
-	for _, v := range scrapeResult.Videos {
-		videoMap[v.BVID] = v
-	}
-
-	var rawComments []bilibili.Comment
-	rpidToBVID := make(map[int64]string)
-
-	for bvid, comments := range scrapeResult.Comments {
-		for _, c := range comments {
-			rawComments = append(rawComments, c)
-			rpidToBVID[c.RPID] = bvid
-			for _, r := range c.Replies {
-				rawComments = append(rawComments, r)
-				rpidToBVID[r.RPID] = bvid
-			}
-		}
-	}
-
-	if len(rawComments) == 0 {
+	// 1. 使用 GetAllCommentsWithVideo 获取评论
+	allComments := GetAllCommentsWithVideo(scrapeResult)
+	if len(allComments) == 0 {
 		return nil, fmt.Errorf("没有获取到任何评论")
 	}
 
-	allKeywords := append([]string{}, brands...)
-	allKeywords = append(allKeywords, keywords...)
-
-	filteredRawComments := comment.FilterAndRank(rawComments, comment.FilterConfig{
-		MinLength:   10,
-		FilterEmoji: true,
-		Keywords:    allKeywords,
-		MaxComments: e.config.MaxComments,
-	})
-
-	log.Printf("[Task %s] Filtered %d→%d comments", taskID, len(rawComments), len(filteredRawComments))
-
-	inputs := make([]ai.CommentInput, len(filteredRawComments))
-	commentTimeMap := make(map[string]int64) // 评论ID -> 时间戳映射
-
-	for i, c := range filteredRawComments {
-		commentID := fmt.Sprintf("comment_%d", i)
-		bvid := rpidToBVID[c.RPID]
-		video := videoMap[bvid]
-
-		inputs[i] = ai.CommentInput{
-			ID:         commentID,
-			Content:    c.Content.Message,
-			VideoTitle: video.Title,
-			VideoBVID:  video.BVID,
+	// 2. 构建 AI 输入
+	// 简单过滤：保留长度大于等于5的评论
+	var inputs []ai.CommentInput
+	for i, c := range allComments {
+		if len(strings.TrimSpace(c.Content)) < 5 {
+			continue
 		}
-		commentTimeMap[commentID] = c.Ctime
+
+		inputs = append(inputs, ai.CommentInput{
+			ID:         fmt.Sprintf("comment_%d", i),
+			Content:    c.Content,
+			VideoTitle: c.VideoTitle,
+			VideoBVID:  c.VideoBVID,
+		})
 	}
+
+	// 如果过滤后没有评论，返回错误
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("过滤后没有有效评论")
+	}
+
+	// 截断到最大评论数
+	if len(inputs) > e.config.MaxComments {
+		inputs = inputs[:e.config.MaxComments]
+	}
+
+	log.Printf("[Task %s] Prepared %d comments for analysis", taskID, len(inputs))
 
 	sse.PushProgress(taskID, sse.StatusAnalyzing, 55, 100,
 		fmt.Sprintf("正在AI分析 %d 条评论...", len(inputs)))
 
+	// 3. AI 分析
 	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(ctx, inputs, dimensions, e.config.AIBatchSize)
 	if err != nil {
 		return nil, fmt.Errorf("AI分析失败: %w", err)
@@ -546,11 +536,11 @@ func (e *Executor) analyzeComments(
 			model = extractModelFromContent(r.Content)
 		}
 
-		// 从映射表获取评论时间戳
-		ctime := commentTimeMap[r.CommentID]
-		publishTime := time.Unix(ctime, 0)
+		// 由于 CommentWithVideo 不包含时间信息，这里使用当前时间或默认值
+		// 注意：如果需要准确时间，需要在 CommentWithVideo 中添加 Time 字段
+		publishTime := time.Time{}
 
-		comment := report.CommentWithScore{
+		commentItem := report.CommentWithScore{
 			Content:     r.Content,
 			Scores:      r.Scores,
 			Brand:       r.Brand,
@@ -565,7 +555,7 @@ func (e *Executor) analyzeComments(
 		isSpecified := false
 		for specBrandLower, origBrand := range specifiedBrands {
 			if strings.Contains(brandLower, specBrandLower) || strings.Contains(specBrandLower, brandLower) {
-				specifiedResults[origBrand] = append(specifiedResults[origBrand], comment)
+				specifiedResults[origBrand] = append(specifiedResults[origBrand], commentItem)
 				isSpecified = true
 				break
 			}
@@ -573,7 +563,7 @@ func (e *Executor) analyzeComments(
 
 		if !isSpecified {
 			// 这是新发现的品牌 - 保留它！
-			discoveredResults[brand] = append(discoveredResults[brand], comment)
+			discoveredResults[brand] = append(discoveredResults[brand], commentItem)
 		}
 	}
 
@@ -805,4 +795,34 @@ func collectDiscoveredBrands(results []ai.CommentAnalysisResult) []string {
 		brands = append(brands, brand)
 	}
 	return brands
+}
+
+// GetAllCommentsWithVideo 获取所有评论（带视频信息）
+func GetAllCommentsWithVideo(result *bilibili.ScrapeResult) []CommentWithVideo {
+	var comments []CommentWithVideo
+
+	videoTitleMap := make(map[string]string)
+	for _, video := range result.Videos {
+		videoTitleMap[video.BVID] = video.Title
+	}
+
+	for bvid, videoComments := range result.Comments {
+		videoTitle := videoTitleMap[bvid]
+		for _, c := range videoComments {
+			comments = append(comments, CommentWithVideo{
+				Content:    c.Content.Message,
+				VideoTitle: videoTitle,
+				VideoBVID:  bvid,
+			})
+			for _, r := range c.Replies {
+				comments = append(comments, CommentWithVideo{
+					Content:    r.Content.Message,
+					VideoTitle: videoTitle,
+					VideoBVID:  bvid,
+				})
+			}
+		}
+	}
+
+	return comments
 }

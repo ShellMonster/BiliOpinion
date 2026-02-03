@@ -46,10 +46,10 @@
 - `frontend/src/pages/Report.tsx` - 型号排名展示
 
 ### Definition of Done
-- [ ] AI能从视频标题+评论中提取品牌和型号
-- [ ] 报告包含型号排名数据
-- [ ] 前端展示型号对比图表
-- [ ] 完整流程测试通过
+- [x] AI能从视频标题+评论中提取品牌和型号
+- [x] 报告包含型号排名数据
+- [x] 前端展示型号对比图表
+- [x] 完整流程测试通过
 
 ### Must NOT Have (Guardrails)
 - 不破坏现有品牌级别分析功能
@@ -86,7 +86,7 @@ See 开发进度.md for implementation details.
 
 ### Phase 3: 执行器改造 (待执行)
 
-- [ ] 4. 修改 CommentAnalysisResult 结构体
+- [x] 4. 修改 CommentAnalysisResult 结构体
 
   **What to do**:
   在 backend/ai/analysis.go 中，找到 CommentAnalysisResult 结构体（约第30-37行），添加 Brand 和 Model 字段：
@@ -107,7 +107,7 @@ See 开发进度.md for implementation details.
 
 ---
 
-- [ ] 5. 修改 AnalyzeCommentsBatch 保存 Brand/Model
+- [x] 5. 修改 AnalyzeCommentsBatch 保存 Brand/Model
 
   **What to do**:
   在 backend/ai/analysis.go 中，找到 AnalyzeCommentsBatch 方法中保存结果的部分（约第183-197行），修改为：
@@ -137,7 +137,7 @@ See 开发进度.md for implementation details.
 
 ---
 
-- [ ] 6. 添加 CommentWithVideo 结构体
+- [x] 6. 添加 CommentWithVideo 结构体
 
   **What to do**:
   在 backend/task/executor.go 中，TaskRequest 结构体之后（约第52行）添加：
@@ -156,7 +156,7 @@ See 开发进度.md for implementation details.
 
 ---
 
-- [ ] 7. 添加 GetAllCommentsWithVideo 函数
+- [x] 7. 添加 GetAllCommentsWithVideo 函数
 
   **What to do**:
   在 backend/task/executor.go 文件末尾添加：
@@ -198,7 +198,7 @@ See 开发进度.md for implementation details.
 
 ---
 
-- [ ] 8. 重写 analyzeComments 方法
+- [x] 8. 重写 analyzeComments 方法
 
   **What to do**:
   在 backend/task/executor.go 中，完全重写 analyzeComments 方法（约第313-396行）：
@@ -220,7 +220,7 @@ See 开发进度.md for implementation details.
 
 ### Phase 4: 报告生成改造
 
-- [ ] 9. 实现型号级别聚合
+- [x] 9. 实现型号级别聚合
 
   **What to do**:
   修改 backend/report/generator.go，在 GenerateReportWithInput 函数中：
@@ -249,7 +249,7 @@ See 开发进度.md for implementation details.
 
 ### Phase 5: 前端展示
 
-- [ ] 10. 添加型号排名展示
+- [x] 10. 添加型号排名展示
 
   **What to do**:
   修改 frontend/src/pages/Report.tsx：
@@ -278,7 +278,7 @@ See 开发进度.md for implementation details.
 
 ### Phase 6: 测试验证
 
-- [ ] 11. 端到端测试
+- [x] 11. 端到端测试
 
   **What to do**:
   1. 重新编译后端

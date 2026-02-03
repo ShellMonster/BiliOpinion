@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, Sparkles, AlertTriangle, Target, CheckCircle2 } from 'lucide-react';
 import type { ReportData, BrandRanking, BrandAnalysis } from '../../types/report';
@@ -8,6 +8,10 @@ interface EnhancedSummaryProps {
   recommendation?: string;
   rankings?: BrandRanking[];
   brandAnalysis?: Record<string, BrandAnalysis>;
+}
+
+interface MarkdownComponentProps {
+  children?: ReactNode
 }
 
 /**
@@ -26,45 +30,40 @@ export const EnhancedSummary: React.FC<EnhancedSummaryProps> = (props) => {
 
   // Custom components for ReactMarkdown to enhance styling
   const markdownComponents = {
-    // Style headers to look like distinct section titles
-    h1: ({ node, ...props }: any) => (
-      <h2 className="text-xl font-bold text-gray-900 mt-6 mb-4 flex items-center gap-2" {...props} />
+    h1: ({ children }: MarkdownComponentProps) => (
+      <h2 className="text-xl font-bold text-gray-900 mt-6 mb-4 flex items-center gap-2">{children}</h2>
     ),
-    h2: ({ node, ...props }: any) => (
-      <h3 className="text-lg font-bold text-gray-800 mt-5 mb-3 flex items-center gap-2 border-l-4 border-blue-500 pl-3" {...props} />
+    h2: ({ children }: MarkdownComponentProps) => (
+      <h3 className="text-lg font-bold text-gray-800 mt-5 mb-3 flex items-center gap-2 border-l-4 border-blue-500 pl-3">{children}</h3>
     ),
-    h3: ({ node, ...props }: any) => (
-      <h4 className="text-base font-bold text-gray-700 mt-4 mb-2" {...props} />
+    h3: ({ children }: MarkdownComponentProps) => (
+      <h4 className="text-base font-bold text-gray-700 mt-4 mb-2">{children}</h4>
     ),
-    // Style lists for better readability
-    ul: ({ node, ...props }: any) => (
-      <ul className="space-y-2 mb-4 text-gray-600 list-none" {...props} />
+    ul: ({ children }: MarkdownComponentProps) => (
+      <ul className="space-y-2 mb-4 text-gray-600 list-none">{children}</ul>
     ),
-    ol: ({ node, ...props }: any) => (
-      <ol className="space-y-2 mb-4 text-gray-600 list-decimal list-inside" {...props} />
+    ol: ({ children }: MarkdownComponentProps) => (
+      <ol className="space-y-2 mb-4 text-gray-600 list-decimal list-inside">{children}</ol>
     ),
-    li: ({ node, ...props }: any) => (
-      <li className="flex items-start gap-2" {...props}>
+    li: ({ children }: MarkdownComponentProps) => (
+      <li className="flex items-start gap-2">
         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 block" />
-        <span className="flex-1">{props.children}</span>
+        <span className="flex-1">{children}</span>
       </li>
     ),
-    // Style paragraphs
-    p: ({ node, ...props }: any) => (
-      <p className="text-gray-600 leading-relaxed mb-4" {...props} />
+    p: ({ children }: MarkdownComponentProps) => (
+      <p className="text-gray-600 leading-relaxed mb-4">{children}</p>
     ),
-    // Style strong text
-    strong: ({ node, ...props }: any) => (
-      <span className="font-semibold text-gray-900 bg-blue-50/50 px-1 rounded" {...props} />
+    strong: ({ children }: MarkdownComponentProps) => (
+      <span className="font-semibold text-gray-900 bg-blue-50/50 px-1 rounded">{children}</span>
     ),
-    // Style blockquotes as warning/note boxes (often used for pitfalls)
-    blockquote: ({ node, ...props }: any) => (
+    blockquote: ({ children }: MarkdownComponentProps) => (
       <div className="bg-amber-50 border-l-4 border-amber-400 p-4 my-4 rounded-r-lg">
         <div className="flex items-center gap-2 text-amber-800 font-semibold mb-1">
           <AlertTriangle className="w-4 h-4" />
           <span>注意事项</span>
         </div>
-        <div className="text-amber-900/80 italic text-sm pl-6" {...props} />
+        <div className="text-amber-900/80 italic text-sm pl-6">{children}</div>
       </div>
     ),
   };

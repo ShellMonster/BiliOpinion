@@ -38,12 +38,34 @@ func HandleParse(c *gin.Context) {
 		return
 	}
 
+	const maxRequirementLength = 1000
+	if len(req.Requirement) > maxRequirementLength {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "需求描述过长，最多支持 1000 个字符"})
+		return
+	}
+
 	// 2. 从数据库获取AI配置
 	// 需要读取用户在设置页面配置的API Key、API Base和模型名称
 	var apiKey, apiBase, model string
-	database.DB.Model(&models.Settings{}).Where("key = ?", "ai_api_key").Pluck("value", &apiKey)
-	database.DB.Model(&models.Settings{}).Where("key = ?", "ai_api_base").Pluck("value", &apiBase)
-	database.DB.Model(&models.Settings{}).Where("key = ?", "ai_model").Pluck("value", &model)
+	if err := database.DB.Model(&models.Settings{}).Where("key = ?", "ai_api_key").Pluck("value", &apiKey).Error; err != nil {
+		// 忽略记录不存在的错误，只处理真正的数据库错误
+		if err.Error() != "record not found" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库查询失败: " + err.Error()})
+			return
+		}
+	}
+	if err := database.DB.Model(&models.Settings{}).Where("key = ?", "ai_api_base").Pluck("value", &apiBase).Error; err != nil {
+		if err.Error() != "record not found" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库查询失败: " + err.Error()})
+			return
+		}
+	}
+	if err := database.DB.Model(&models.Settings{}).Where("key = ?", "ai_model").Pluck("value", &model).Error; err != nil {
+		if err.Error() != "record not found" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库查询失败: " + err.Error()})
+			return
+		}
+	}
 
 	// 3. 验证AI配置是否完整
 	if apiKey == "" {

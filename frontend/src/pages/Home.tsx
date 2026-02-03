@@ -52,7 +52,7 @@ const Home = () => {
           </div>
         </form>
 
-        <div className="flex items-center justify-center gap-2 flex-wrap mb-16">
+        <div className="flex items-center justify-center gap-x-1 gap-y-2 flex-wrap mb-16">
           <span className="text-sm text-gray-400">试试这些:</span>
           {examples.map((text, i) => (
             <button

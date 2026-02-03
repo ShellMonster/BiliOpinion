@@ -6,6 +6,10 @@ interface BrandHeatmapProps {
   data: ReportData;
 }
 
+interface HeatmapTooltipParams {
+  value: [number, number, number]
+}
+
 /**
  * 品牌维度得分热力图组件
  * 展示品牌在各个维度上的得分表现，使用颜色区分得分等级
@@ -35,7 +39,7 @@ export const BrandHeatmap: React.FC<BrandHeatmapProps> = ({ data }) => {
     return {
       tooltip: {
         position: 'top',
-        formatter: (params: any) => {
+        formatter: (params: HeatmapTooltipParams) => {
           const dimIndex = params.value[0];
           const brandIndex = params.value[1];
           const score = params.value[2];

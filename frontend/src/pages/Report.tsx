@@ -19,6 +19,7 @@ import { DimensionFilter } from '../components/Report/DimensionFilter'
 import { BrandDetailModal } from '../components/Report/BrandDetailModal'
 import { CompetitorCompare } from '../components/Report/CompetitorCompare'
 import { DecisionTree } from '../components/Report/DecisionTree'
+import { VideoSourceList } from '../components/Report/VideoSourceList'
 import type { SentimentStats, ModelRanking } from '../types/report'
 
 type TabType = 'overview' | 'charts' | 'summary'
@@ -304,6 +305,10 @@ const Report = () => {
                   </table>
                 </div>
               </div>
+            )}
+
+            {data.video_sources && data.video_sources.length > 0 && (
+              <VideoSourceList videos={data.video_sources} />
             )}
           </div>
         )}

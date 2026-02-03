@@ -17,6 +17,14 @@ import (
 	"time"
 )
 
+var modelPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(iPhone|Galaxy|Pixel|Mate|Mi|Redmi|V|G|X|S)\s*(\d+)\s*(Pro|Max|Plus|Ultra|Detect|Slim)(\s+(Pro|Max|Plus|Ultra))?`),
+	regexp.MustCompile(`(?i)\b(Pura\s+(X|Max)|T[1-4]S?|SCOOPER(\s+SE)?|Young|M1(\s+Pro)?|T\s+Air)\b`),
+	regexp.MustCompile(`(?i)([A-Z]+)(\d+)\s*(Pro|Max|Plus|Ultra|Detect|Slim)`),
+	regexp.MustCompile(`(?i)\b([A-Z]+)(\d+)\b`),
+	regexp.MustCompile(`(?i)\s(Pro|Max|Plus|Ultra)\s`),
+}
+
 // AppSettings 应用配置（从数据库读取后的结构化配置）
 type AppSettings struct {
 	AIBaseURL      string
@@ -263,17 +271,29 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 // createHistory 创建分析历史记录
 func (e *Executor) createHistory(req TaskRequest, taskID string) (*models.AnalysisHistory, error) {
-	keywordsJSON, _ := json.Marshal(req.Keywords)
-	brandsJSON, _ := json.Marshal(req.Brands)
+	keywordsJSON, err := json.Marshal(req.Keywords)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal keywords: %w", err)
+	}
+	brandsJSON, err := json.Marshal(req.Brands)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal brands: %w", err)
+	}
 
 	dimNames := make([]string, len(req.Dimensions))
 	for i, d := range req.Dimensions {
 		dimNames[i] = d.Name
 	}
-	dimensionsJSON, _ := json.Marshal(dimNames)
+	dimensionsJSON, err := json.Marshal(dimNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal dimensions: %w", err)
+	}
 
 	// 序列化任务配置
-	configJSON, _ := json.Marshal(e.config)
+	configJSON, err := json.Marshal(e.config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
 
 	history := &models.AnalysisHistory{
 		TaskID:        taskID,
@@ -612,33 +632,41 @@ func (e *Executor) saveReport(historyID uint, reportData *report.ReportData) (ui
 
 // updateHistoryStatus 更新历史记录状态
 func (e *Executor) updateHistoryStatus(historyID uint, status string) {
-	database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Update("status", status)
+	if err := database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Update("status", status).Error; err != nil {
+		log.Printf("[Executor] Failed to update history status for ID %d: %v", historyID, err)
+	}
 }
 
 // updateHistoryStats 更新历史记录统计信息
 func (e *Executor) updateHistoryStats(historyID uint, videoCount, commentCount int) {
-	database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
+	if err := database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
 		"video_count":   videoCount,
 		"comment_count": commentCount,
-	})
+	}).Error; err != nil {
+		log.Printf("[Executor] Failed to update history stats for ID %d: %v", historyID, err)
+	}
 }
 
 // updateHistoryWithReport 更新历史记录的报告ID和状态
 func (e *Executor) updateHistoryWithReport(historyID uint, reportID uint) {
-	database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
+	if err := database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
 		"report_id": reportID,
 		"status":    models.StatusCompleted,
-	})
+	}).Error; err != nil {
+		log.Printf("[Executor] Failed to update history with report for ID %d: %v", historyID, err)
+	}
 }
 
 // updateTaskProgress 更新任务进度到数据库
 func (e *Executor) updateTaskProgress(historyID uint, stage string, progress int, message string) {
-	database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
+	if err := database.DB.Model(&models.AnalysisHistory{}).Where("id = ?", historyID).Updates(map[string]interface{}{
 		"stage":          stage,
 		"progress":       progress,
 		"progress_msg":   message,
 		"last_heartbeat": time.Now(),
-	})
+	}).Error; err != nil {
+		log.Printf("[Executor] Failed to update task progress for ID %d: %v", historyID, err)
+	}
 }
 
 // max 返回两个整数中的较大值
@@ -750,31 +778,12 @@ func formatBrandName(brand string) string {
 // 返回：
 //   - 提取到的型号，如果未找到则返回空字符串
 func extractModelFromContent(content string) string {
-	// 正则模式按优先级匹配
-	patterns := []struct {
-		regex       string
-		description string
-	}{
-		// 1. 品牌+型号+系列：iPhone 15 Pro Max, Galaxy S23 Ultra
-		{`(?i)(iPhone|Galaxy|Pixel|Mate|Mi|Redmi|V|G|X|S)\s*(\d+)\s*(Pro|Max|Plus|Ultra|Detect|Slim)(\s+(Pro|Max|Plus|Ultra))?`, "品牌+型号+系列"},
-		// 2. 猫砂盆常见型号：Pura X, Pura Max, T3, T4, SCOOPER, SCOOPER SE, Young, M1, M1 Pro, T1, T1S, T Air
-		{`(?i)\b(Pura\s+(X|Max)|T[1-4]S?|SCOOPER(\s+SE)?|Young|M1(\s+Pro)?|T\s+Air)\b`, "猫砂盆型号"},
-		// 3. 字母+数字+系列：V12 Detect, G10 Pro
-		{`(?i)([A-Z]+)(\d+)\s*(Pro|Max|Plus|Ultra|Detect|Slim)`, "字母+数字+系列"},
-		// 4. 字母+数字：V12, G10, X5, S23
-		{`(?i)\b([A-Z]+)(\d+)\b`, "字母+数字"},
-		// 5. 纯系列名（最后尝试，需要前后有空格或标点）
-		{`(?i)\s(Pro|Max|Plus|Ultra)\s`, "纯系列名"},
-	}
-
-	for _, p := range patterns {
-		re := regexp.MustCompile(p.regex)
+	for _, re := range modelPatterns {
 		if match := re.FindString(content); match != "" {
 			return strings.TrimSpace(match)
 		}
 	}
-
-	return "" // 未找到型号
+	return ""
 }
 
 // collectDiscoveredBrands 从分析结果中收集已发现的品牌

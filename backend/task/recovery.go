@@ -63,19 +63,34 @@ func recoverTask(history models.AnalysisHistory) {
 	// 解析任务配置
 	var config TaskConfig
 	if history.TaskConfig != "" {
-		json.Unmarshal([]byte(history.TaskConfig), &config)
+		if err := json.Unmarshal([]byte(history.TaskConfig), &config); err != nil {
+			log.Printf("[Recovery] Failed to unmarshal task config for task %s: %v, using defaults", taskID, err)
+			config = DefaultTaskConfig()
+		}
 	} else {
 		config = DefaultTaskConfig()
 	}
 
 	// 解析任务请求参数
 	var keywords, brands []string
-	json.Unmarshal([]byte(history.Keywords), &keywords)
-	json.Unmarshal([]byte(history.Brands), &brands)
+	if err := json.Unmarshal([]byte(history.Keywords), &keywords); err != nil {
+		log.Printf("[Recovery] Failed to unmarshal keywords for task %s: %v", taskID, err)
+		database.DB.Model(&history).Update("status", models.StatusFailed)
+		return
+	}
+	if err := json.Unmarshal([]byte(history.Brands), &brands); err != nil {
+		log.Printf("[Recovery] Failed to unmarshal brands for task %s: %v", taskID, err)
+		database.DB.Model(&history).Update("status", models.StatusFailed)
+		return
+	}
 
 	// 解析评价维度
 	var dimNames []string
-	json.Unmarshal([]byte(history.Dimensions), &dimNames)
+	if err := json.Unmarshal([]byte(history.Dimensions), &dimNames); err != nil {
+		log.Printf("[Recovery] Failed to unmarshal dimensions for task %s: %v", taskID, err)
+		database.DB.Model(&history).Update("status", models.StatusFailed)
+		return
+	}
 	dimensions := make([]ai.Dimension, len(dimNames))
 	for i, name := range dimNames {
 		dimensions[i] = ai.Dimension{

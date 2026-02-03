@@ -5,6 +5,7 @@ import (
 	"bilibili-analyzer/backend/sse"
 	"bilibili-analyzer/backend/task"
 	"context"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -78,6 +79,7 @@ func HandleConfirm(c *gin.Context) {
 		})
 
 		if err != nil {
+			log.Printf("[Task %s] Execution failed: %v", taskID, err)
 			sse.PushError(taskID, err.Error())
 		}
 	}()

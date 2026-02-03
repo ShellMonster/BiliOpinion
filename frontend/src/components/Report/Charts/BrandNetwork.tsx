@@ -6,6 +6,22 @@ interface BrandNetworkProps {
   data: ReportData;
 }
 
+interface NetworkNode {
+  id: string
+  name: string
+  value: number
+  symbolSize: number
+  category: number
+  label: { show: boolean; fontWeight?: string }
+  itemStyle: { color: string }
+  tooltip?: { formatter: string }
+}
+
+interface NetworkLink {
+  source: string
+  target: string
+}
+
 /**
  * 品牌-型号关系网络图组件
  * 展示品牌与型号之间的从属关系，节点大小反映评论热度
@@ -29,8 +45,8 @@ export const BrandNetwork: React.FC<BrandNetworkProps> = ({ data }) => {
     }
 
     // 准备节点和边
-    const nodes: any[] = [];
-    const links: any[] = [];
+    const nodes: NetworkNode[] = [];
+    const links: NetworkLink[] = [];
     const addedNodes = new Set<string>();
 
     // 计算最大评论数用于归一化节点大小

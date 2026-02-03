@@ -49,7 +49,10 @@ func (wk *WbiKeys) Sign(u *url.URL) (err error) {
 
 	values := u.Query()
 	// 移除可能干扰签名的特殊字符
-	values = removeUnwantedChars(values, '!', '\'', '(', ')', '*')
+	values, err = removeUnwantedChars(values, '!', '\'', '(', ')', '*')
+	if err != nil {
+		return err
+	}
 
 	// 添加当前时间戳
 	values.Set("wts", strconv.FormatInt(time.Now().Unix(), 10))
@@ -76,7 +79,8 @@ func (wk *WbiKeys) update(purge bool) error {
 	}
 
 	// 从B站nav接口获取密钥
-	resp, err := http.Get("https://api.bilibili.com/x/web-interface/nav")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("https://api.bilibili.com/x/web-interface/nav")
 	if err != nil {
 		return err
 	}
@@ -144,16 +148,16 @@ var mixinKeyEncTab = [...]int{
 //
 // 返回：
 //   - url.Values: 清理后的参数
-func removeUnwantedChars(v url.Values, chars ...byte) url.Values {
+func removeUnwantedChars(v url.Values, chars ...byte) (url.Values, error) {
 	b := []byte(v.Encode())
 	for _, c := range chars {
 		b = bytes.ReplaceAll(b, []byte{c}, nil)
 	}
 	s, err := url.ParseQuery(string(b))
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to parse query after removing chars: %w", err)
 	}
-	return s
+	return s, nil
 }
 
 // Nav B站nav接口响应结构

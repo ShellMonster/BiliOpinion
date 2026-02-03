@@ -37,7 +37,6 @@ const Progress = () => {
   ])
 
   useEffect(() => {
-    console.log('[Progress] Component mounted, task_id:', id)
     if (!id) {
       console.error('[Progress] No task_id provided')
       setError('缺少任务ID')
@@ -48,11 +47,9 @@ const Progress = () => {
     eventSourceRef.current = eventSource
 
     eventSource.onopen = () => {
-      console.log('[Progress] SSE connection opened')
     }
 
     eventSource.onmessage = (event) => {
-      console.log('[Progress] SSE data received:', event.data)
       try {
         const data: SSEData = JSON.parse(event.data)
         
@@ -68,7 +65,6 @@ const Progress = () => {
 
         if (data.status === 'completed') {
           const reportId = data.progress?.stage
-          console.log('[Progress] Task completed, reportId:', reportId)
           eventSource.close()
           setTimeout(() => {
             navigate(`/report/${reportId}`)
@@ -92,7 +88,6 @@ const Progress = () => {
     }
 
     return () => {
-      console.log('[Progress] Cleaning up SSE connection')
       eventSource.close()
     }
   }, [id, navigate])

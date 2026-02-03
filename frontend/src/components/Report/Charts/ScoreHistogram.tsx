@@ -7,6 +7,12 @@ interface ScoreHistogramProps {
   title?: string;
 }
 
+interface EChartsLabelParams {
+  value: number
+  dataIndex: number
+  seriesIndex: number
+}
+
 /**
  * 品牌评分分布柱状图组件
  * 显示各品牌的好评、中评、差评数量分布
@@ -73,7 +79,7 @@ export const ScoreHistogram: React.FC<ScoreHistogramProps> = ({ data, title = '�
           label: {
             show: true,
             position: 'top',
-            formatter: (params: any) => params.value > 0 ? params.value : ''
+            formatter: (params: EChartsLabelParams) => params.value > 0 ? params.value : ''
           }
         },
         {
@@ -86,7 +92,7 @@ export const ScoreHistogram: React.FC<ScoreHistogramProps> = ({ data, title = '�
           label: {
             show: true,
             position: 'top',
-            formatter: (params: any) => params.value > 0 ? params.value : ''
+            formatter: (params: EChartsLabelParams) => params.value > 0 ? params.value : ''
           }
         },
         {
@@ -99,7 +105,7 @@ export const ScoreHistogram: React.FC<ScoreHistogramProps> = ({ data, title = '�
           label: {
             show: true,
             position: 'top',
-            formatter: (params: any) => params.value > 0 ? params.value : ''
+            formatter: (params: EChartsLabelParams) => params.value > 0 ? params.value : ''
           }
         }
       ]

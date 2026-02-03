@@ -170,7 +170,7 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
                 典型好评
               </h4>
               <div className="space-y-3">
-                {topComments.length > 0 ? (
+                {topComments && topComments.length > 0 ? (
                   topComments.map((comment, i) => (
                     <div key={i} className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 text-sm text-slate-700 leading-relaxed hover:bg-emerald-50 transition-colors">
                       "{comment.content}"
@@ -198,7 +198,7 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
                 典型差评
               </h4>
               <div className="space-y-3">
-                {badComments.length > 0 ? (
+                {badComments && badComments.length > 0 ? (
                   badComments.map((comment, i) => (
                     <div key={i} className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 text-sm text-slate-700 leading-relaxed hover:bg-rose-50 transition-colors">
                       "{comment.content}"

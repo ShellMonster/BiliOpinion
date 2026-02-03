@@ -192,6 +192,13 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 		APIKey:  settings.AIAPIKey,
 		Model:   settings.AIModel,
 	})
+
+	// 设置AI分析进度回调
+	aiClient.SetProgressCallback(func(stage string, current, total int, message string) {
+		progress := 50 + (current * 35 / max(total, 1)) // 50-85%
+		sse.PushProgress(taskID, sse.StatusAnalyzing, progress, 100, message)
+	})
+
 	analysisResults, err := e.analyzeComments(ctx, taskID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)

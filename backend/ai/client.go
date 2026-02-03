@@ -15,11 +15,12 @@ import (
 // Client AI客户端
 // 用于与OpenAI兼容的API进行交互
 type Client struct {
-	apiBase    string              // API基础URL（如：https://api.openai.com/v1）
-	apiKey     string              // API密钥
-	model      string              // 使用的模型名称（如：gemini-3-flash-preview）
-	httpClient *http.Client        // HTTP客户端
-	sem        *semaphore.Weighted // 并发控制信号量
+	apiBase          string              // API基础URL（如：https://api.openai.com/v1）
+	apiKey           string              // API密钥
+	model            string              // 使用的模型名称（如：gemini-3-flash-preview）
+	httpClient       *http.Client        // HTTP客户端
+	sem              *semaphore.Weighted // 并发控制信号量
+	progressCallback ProgressCallback    // 进度回调函数
 }
 
 // Config AI客户端配置
@@ -184,4 +185,25 @@ func (c *Client) doRequest(ctx context.Context, req ChatCompletionRequest) (stri
 	}
 
 	return resp.Choices[0].Message.Content, nil
+}
+
+// SetProgressCallback 设置进度回调
+//
+// 参数：
+//   - callback: 进度回调函数
+//
+// 示例：
+//
+//	client.SetProgressCallback(func(stage string, current, total int, message string) {
+//	    fmt.Printf("[%s] %d/%d: %s\n", stage, current, total, message)
+//	})
+func (c *Client) SetProgressCallback(callback ProgressCallback) {
+	c.progressCallback = callback
+}
+
+// reportProgress 报告进度
+func (c *Client) reportProgress(stage string, current, total int, message string) {
+	if c.progressCallback != nil {
+		c.progressCallback(stage, current, total, message)
+	}
 }

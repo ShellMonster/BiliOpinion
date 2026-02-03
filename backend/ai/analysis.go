@@ -12,6 +12,14 @@ import (
 
 // 注意：Dimension 类型已在 keyword.go 中定义，此处复用
 
+// ProgressCallback 进度回调函数类型
+// 参数：
+//   - stage: 当前阶段
+//   - current: 当前进度
+//   - total: 总数
+//   - message: 状态消息
+type ProgressCallback func(stage string, current, total int, message string)
+
 // AnalyzeCommentRequest 分析评论请求
 // 包含待分析的评论内容和评价维度列表
 type AnalyzeCommentRequest struct {
@@ -265,6 +273,9 @@ func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []Co
 
 	for i, batch := range batches {
 		log.Printf("[AI] 正在分析第 %d/%d 批（%d 条评论）...", i+1, len(batches), len(batch))
+
+		// 报告进度
+		c.reportProgress("analyzing", i+1, len(batches), fmt.Sprintf("正在分析第 %d/%d 批（%d 条评论）", i+1, len(batches), len(batch)))
 
 		// 分析当前批次
 		results, err := c.AnalyzeCommentsBatchMerged(ctx, batch, dimensions)

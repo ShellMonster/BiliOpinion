@@ -41,9 +41,9 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
 
   // 进度条颜色
   const getProgressColor = (score: number) => {
-    if (score >= 90) return 'bg-emerald-500';
-    if (score >= 80) return 'bg-blue-500';
-    if (score >= 70) return 'bg-amber-500';
+    if (score >= 9) return 'bg-emerald-500';
+    if (score >= 8) return 'bg-blue-500';
+    if (score >= 7) return 'bg-amber-500';
     return 'bg-rose-500';
   };
 
@@ -92,7 +92,7 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
                   <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full ${getProgressColor(score)} transition-all duration-500`}
-                      style={{ width: `${score}%` }}
+                      style={{ width: `${score * 10}%` }}
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 truncate">

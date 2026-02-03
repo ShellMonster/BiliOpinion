@@ -14,7 +14,7 @@ export default function Settings() {
   const [settings, setSettings] = useState<SettingsData>({
     aiApiBase: 'https://api.openai.com/v1',
     aiApiKey: '',
-    aiModel: 'gpt-3.5-turbo',
+    aiModel: 'gemini-3-flash-preview',
     bilibiliCookie: ''
   })
   const { showToast } = useToast()
@@ -61,7 +61,7 @@ export default function Settings() {
             label="Model"
             value={settings.aiModel}
             onChange={(e) => setSettings({...settings, aiModel: e.target.value})}
-            placeholder="gpt-3.5-turbo"
+            placeholder="gemini-3-flash-preview"
           />
         </div>
 

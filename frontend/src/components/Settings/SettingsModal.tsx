@@ -21,7 +21,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [settings, setSettings] = useState<SettingsData>({
     aiApiBase: 'https://api.openai.com/v1',
     aiApiKey: '',
-    aiModel: 'gpt-3.5-turbo',
+    aiModel: 'gemini-3-flash-preview',
     bilibiliCookie: ''
   })
 
@@ -83,7 +83,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           label="Model"
           value={settings.aiModel}
           onChange={(e) => setSettings({...settings, aiModel: e.target.value})}
-          placeholder="gpt-3.5-turbo"
+          placeholder="gemini-3-flash-preview"
         />
       </div>
 

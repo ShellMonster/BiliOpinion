@@ -58,7 +58,7 @@ func HandleParse(c *gin.Context) {
 
 	// 如果没有配置模型，使用默认值
 	if model == "" {
-		model = "gpt-3.5-turbo"
+		model = "gemini-3-flash-preview"
 	}
 
 	// 4. 创建AI客户端

@@ -17,7 +17,7 @@ import (
 type Client struct {
 	apiBase    string              // API基础URL（如：https://api.openai.com/v1）
 	apiKey     string              // API密钥
-	model      string              // 使用的模型名称（如：gpt-3.5-turbo）
+	model      string              // 使用的模型名称（如：gemini-3-flash-preview）
 	httpClient *http.Client        // HTTP客户端
 	sem        *semaphore.Weighted // 并发控制信号量
 }

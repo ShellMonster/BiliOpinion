@@ -631,7 +631,7 @@ npm run dev
 |--------|------|--------|
 | AI API Base | API 基础地址 | https://api.openai.com/v1 |
 | AI API Key | API 密钥 | - |
-| AI Model | 使用的模型 | gemini-3-flash-preview（推荐）/ gpt-3.5-turbo |
+| AI Model | 使用的模型 | gemini-3-flash-preview |
 
 ### 2. B站 Cookie 配置
 

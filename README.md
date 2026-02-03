@@ -800,6 +800,17 @@ A: 建议：
 
 ---
 
+## 致谢
+
+本项目在实现 B站 API 调用和数据加解密功能时，参考了以下开源项目：
+
+- [bilibili-API-collect (pskdje)](https://github.com/pskdje/bilibili-API-collect) - B站 API 文档和 WBI 签名实现
+- [bilibili-API-collect (SocialSisterYi)](https://github.com/SocialSisterYi/bilibili-API-collect) - 原始 B站 API 收集项目
+
+感谢这些项目为开发者社区整理和维护 B站 API 文档。特别感谢原作者 SocialSisterYi 的贡献，以及 pskdje 在原项目因不可抗力删除后继续维护相关内容。
+
+---
+
 ## 许可证
 
 MIT License

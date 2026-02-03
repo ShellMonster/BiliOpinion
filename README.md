@@ -94,42 +94,53 @@ graph TD
 ## Agent 调用流程
 
 ```mermaid
-graph TD
-    START(["用户输入需求"]) --> PHASE1["阶段1: 需求解析"]
-    PHASE1 --> AI1["AI 解析关键词"]
+graph LR
+    subgraph "1. 关键词解析 Agent"
+        AI1["AI 关键词解析"]
+        AI1 --> T1["理解用户需求"]
+        AI1 --> T2["识别商品类型"]
+        AI1 --> T3["推荐主流品牌"]
+        AI1 --> T4["设计评价维度"]
+        AI1 --> T5["生成搜索关键词"]
+    end
 
-    AI1 --> CONFIRM["用户确认?"]
-    CONFIRM -->|"取消"| END(["结束"])
-    CONFIRM -->|"确认"| PHASE2["阶段2: 数据采集"]
+    subgraph "2. 评论分析 Agent"
+        AI2["AI 评论分析"]
+        AI2 --> A1["提取品牌和型号"]
+        AI2 --> A2["各维度打分1-10"]
+        AI2 --> A3["识别情感倾向"]
+        AI2 --> A4["判断优劣势"]
+    end
 
-    PHASE2 --> SEARCH["搜索B站视频"]
-    SEARCH --> SCRAPE["抓取评论"]
-    SCRAPE --> PHASE3["阶段3: AI分析"]
+    subgraph "3. 品牌识别 Agent"
+        AI3["AI 品牌识别"]
+        AI3 --> B1["识别未知品牌"]
+        AI3 --> B2["型号归一化"]
+        AI3 --> B3["品牌别名映射"]
+    end
 
-    PHASE3 --> BATCH["分批处理"]
-    BATCH --> AI2["AI 分析评论"]
-    AI2 --> AI3["AI 识别品牌"]
+    subgraph "4. 购买建议 Agent"
+        AI4["AI 购买建议"]
+        AI4 --> R1["分析品牌优劣势"]
+        AI4 --> R2["对比型号表现"]
+        AI4 --> R3["生成推荐理由"]
+        AI4 --> R4["给出购买建议"]
+    end
 
-    AI3 --> PHASE4["阶段4: 报告生成"]
-    PHASE4 --> RANK["计算排名"]
-    RANK --> AI4["AI 生成建议"]
-    AI4 --> REPORT["生成报告"]
+    USER(["用户输入"]) --> AI1
+    AI1 --> DATA["数据采集<br/>搜索+抓取"]
+    DATA --> AI2
+    AI2 --> AI3
+    AI3 --> AI4
+    AI4 --> OUT(["输出报告"])
 
-    REPORT --> SAVE["保存数据库"]
-    SAVE --> EXPORT["导出<br/>图片/Excel/PDF"]
-    EXPORT --> COMPLETE(["完成"])
-
-    style START fill:#e1f5fe
-    style COMPLETE fill:#e8f5e9
-    style END fill:#ffcdd2
     style AI1 fill:#fff3e0
     style AI2 fill:#fff3e0
     style AI3 fill:#fff3e0
     style AI4 fill:#fff3e0
-    style PHASE1 fill:#e3f2fd
-    style PHASE2 fill:#e3f2fd
-    style PHASE3 fill:#e3f2fd
-    style PHASE4 fill:#e3f2fd
+    style USER fill:#e1f5fe
+    style OUT fill:#e8f5e9
+    style DATA fill:#e3f2fd
 ```
 
 ---
@@ -620,7 +631,7 @@ npm run dev
 |--------|------|--------|
 | AI API Base | API 基础地址 | https://api.openai.com/v1 |
 | AI API Key | API 密钥 | - |
-| AI Model | 使用的模型 | gemini-2.0-flash-exp（推荐）/ gpt-3.5-turbo |
+| AI Model | 使用的模型 | gemini-3-flash-preview（推荐）/ gpt-3.5-turbo |
 
 ### 2. B站 Cookie 配置
 
@@ -758,7 +769,7 @@ A: Cookie 一般有效期约 30 天，过期后需要重新获取。步骤：登
 
 ### Q: AI 分析成本如何控制？
 
-A: 推荐使用 Google Gemini `gemini-2.0-flash-exp` 模型，速度快且成本低。同时可以通过调整 `最大分析评论数` 参数控制调用次数。
+A: 推荐使用 Google Gemini `gemini-3-flash-preview` 模型，速度快且成本低。同时可以通过调整 `最大分析评论数` 参数控制调用次数。
 
 ### Q: 评论抓取失败怎么办？
 

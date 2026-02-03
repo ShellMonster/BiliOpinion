@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Play, MessageCircle, ExternalLink, Video } from 'lucide-react'
 import type { VideoSource } from '../../types/report'
 
@@ -18,6 +18,11 @@ export const VideoSourceList: React.FC<VideoSourceListProps> = ({ videos }) => {
     return null
   }
 
+  // 按播放量降序排序
+  const sortedVideos = useMemo(() => {
+    return [...videos].sort((a, b) => b.play - a.play)
+  }, [videos])
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200">
@@ -31,7 +36,7 @@ export const VideoSourceList: React.FC<VideoSourceListProps> = ({ videos }) => {
       </div>
       
       <div className="divide-y divide-gray-100">
-        {videos.map((video, index) => (
+        {sortedVideos.map((video, index) => (
           <a
             key={video.bvid}
             href={`https://www.bilibili.com/video/${video.bvid}`}

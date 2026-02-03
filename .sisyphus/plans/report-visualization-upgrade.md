@@ -57,10 +57,10 @@
 - 后端数据扩展: keyword_frequency, sentiment_distribution
 
 ### Definition of Done
-- [ ] 所有15个功能可用
-- [ ] 前端构建成功: `cd frontend && npm run build` 退出码0
-- [ ] 后端编译成功: `go build ./backend/...` 退出码0
-- [ ] Playwright测试通过
+- [x] 所有15个功能可用
+- [x] 前端构建成功: `cd frontend && npm run build` 退出码0
+- [x] 后端编译成功: `go build ./backend/...` 退出码0
+- [x] Playwright测试通过
 
 ### Must Have
 - 热力图显示品牌×维度得分矩阵
@@ -263,7 +263,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 1: 重构Report.tsx
 
-- [ ] 4. 拆分Report.tsx - 提取Header组件
+- [x] 4. 拆分Report.tsx - 提取Header组件
 
   **What to do**:
   - 创建 `frontend/src/components/Report/ReportHeader.tsx`
@@ -298,7 +298,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 5. 拆分Report.tsx - 提取统计卡片
+- [x] 5. 拆分Report.tsx - 提取统计卡片
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Overview/KeyStatsCards.tsx`
@@ -327,7 +327,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 6. 拆分Report.tsx - 提取图表组件
+- [x] 6. 拆分Report.tsx - 提取图表组件
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/BrandRadarChart.tsx`
@@ -360,7 +360,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 2: 后端扩展
 
-- [ ] 7. 后端新增KeywordFrequency字段
+- [x] 7. 后端新增KeywordFrequency字段
 
   **What to do**:
   - 在 `backend/report/generator.go` 中新增 KeywordItem 结构体
@@ -400,7 +400,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 8. 后端新增SentimentDistribution字段
+- [x] 8. 后端新增SentimentDistribution字段
 
   **What to do**:
   - 在 ReportData 中新增 SentimentDistribution 字段
@@ -437,7 +437,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 3: 新图表组件
 
-- [ ] 9. 实现热力图 BrandHeatmap.tsx
+- [x] 9. 实现热力图 BrandHeatmap.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/BrandHeatmap.tsx`
@@ -469,7 +469,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 10. 实现词云 KeywordCloud.tsx
+- [x] 10. 实现词云 KeywordCloud.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/KeywordCloud.tsx`
@@ -500,7 +500,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 11. 实现情感饼图 SentimentPie.tsx
+- [x] 11. 实现情感饼图 SentimentPie.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/SentimentPie.tsx`
@@ -527,7 +527,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 12. 实现品牌卡片 BrandCard.tsx
+- [x] 12. 实现品牌卡片 BrandCard.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/BrandCard.tsx`
@@ -554,7 +554,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 13. 实现维度筛选器 DimensionFilter.tsx
+- [x] 13. 实现维度筛选器 DimensionFilter.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/DimensionFilter.tsx`
@@ -581,7 +581,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 14. 实现品牌详情弹窗 BrandDetailModal.tsx
+- [x] 14. 实现品牌详情弹窗 BrandDetailModal.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/BrandDetailModal.tsx`
@@ -613,7 +613,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 4: 高级功能
 
-- [ ] 15. 实现雷达图选择器 RadarBrandSelector.tsx
+- [x] 15. 实现雷达图选择器 RadarBrandSelector.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/RadarBrandSelector.tsx`
@@ -640,7 +640,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 16. 实现评分直方图 ScoreHistogram.tsx
+- [x] 16. 实现评分直方图 ScoreHistogram.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/ScoreHistogram.tsx`
@@ -667,7 +667,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 17. 实现型号分析 ModelAnalysis.tsx
+- [x] 17. 实现型号分析 ModelAnalysis.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/ModelAnalysis.tsx`
@@ -694,7 +694,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 18. 实现竞品对比 CompetitorCompare.tsx
+- [x] 18. 实现竞品对比 CompetitorCompare.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/CompetitorCompare.tsx`
@@ -721,7 +721,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 19. 实现品牌网络图 BrandNetwork.tsx
+- [x] 19. 实现品牌网络图 BrandNetwork.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/Charts/BrandNetwork.tsx`
@@ -748,7 +748,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 20. 实现决策树 DecisionTree.tsx
+- [x] 20. 实现决策树 DecisionTree.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/DecisionTree.tsx`
@@ -775,7 +775,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 21. 实现AI总结增强 EnhancedSummary.tsx
+- [x] 21. 实现AI总结增强 EnhancedSummary.tsx
 
   **What to do**:
   - 创建 `frontend/src/components/Report/EnhancedSummary.tsx`
@@ -804,7 +804,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 5: 导出功能
 
-- [ ] 22. 实现图片导出
+- [x] 22. 实现图片导出
 
   **What to do**:
   - 在ReportHeader中添加"导出图片"按钮
@@ -831,7 +831,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 23. 实现Excel导出
+- [x] 23. 实现Excel导出
 
   **What to do**:
   - 在ReportHeader中添加"导出Excel"按钮
@@ -860,7 +860,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ### Phase 6: 集成与测试
 
-- [ ] 24. 集成所有组件到Report.tsx
+- [x] 24. 集成所有组件到Report.tsx
 
   **What to do**:
   - 更新 `frontend/src/pages/Report.tsx`
@@ -891,7 +891,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 25. 设置Playwright测试
+- [x] 25. 设置Playwright测试
 
   **What to do**:
   - 安装 @playwright/test
@@ -918,7 +918,7 @@ Task 1 → Task 4-6 → Task 9-14 → Task 24 → Task 26
 
 ---
 
-- [ ] 26. 运行完整测试验证
+- [x] 26. 运行完整测试验证
 
   **What to do**:
   - 启动后端服务
@@ -977,8 +977,8 @@ cd frontend && npx playwright test
 ```
 
 ### Final Checklist
-- [ ] 所有15个功能可用
-- [ ] Report.tsx 不超过200行
-- [ ] 后端API包含keyword_frequency和sentiment_distribution
-- [ ] 图片和Excel导出功能正常
-- [ ] Playwright测试通过
+- [x] 所有15个功能可用
+- [x] Report.tsx 不超过200行
+- [x] 后端API包含keyword_frequency和sentiment_distribution
+- [x] 图片和Excel导出功能正常
+- [x] Playwright测试通过

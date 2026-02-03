@@ -638,9 +638,9 @@ npm run dev
 - 本项目兼容所有 OpenAI 格式的 API，理论上 **2025 年及以后发布的模型**均可使用
 - 优先选择 **发布时间更接近当前** 的模型，技术更新、效果更好
 - 根据自己的 **成本预算** 选择合适的模型：
-  - 免费或低成本：Google Gemini Flash 系列、DeepSeek 等
-  - 中等成本：GPT-4o-mini、Claude Haiku 等
-  - 高性能需求：GPT-4o、Claude Sonnet 等
+  - 免费或低成本：Gemini 2.5 Flash/Flash Lite、DeepSeek 等
+  - 中等成本：GPT-4o-mini、Claude 4 Haiku 等
+  - 高性能需求：Gemini 2.5 Pro、Claude 4 Opus 等
 - 推荐配置：`gemini-3-flash-preview`（速度快、成本低、效果稳定）
 
 ### 2. B站 Cookie 配置

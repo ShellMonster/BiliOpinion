@@ -72,7 +72,7 @@ const Confirm = () => {
         })
       })
       const result = await response.json()
-      navigate(`/progress/${result.task_id}`)
+      navigate(`/progress/${result.task_id}?title=${encodeURIComponent(data.product_type)}`)
     } catch (error) {
       console.error('Failed to confirm:', error)
       setSubmitting(false)

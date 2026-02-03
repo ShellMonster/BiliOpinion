@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 
 interface Step {
   id: number
@@ -22,6 +22,8 @@ interface SSEData {
 const Progress = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const title = searchParams.get('title') || '分析任务'
   const eventSourceRef = useRef<EventSource | null>(null)
 
   const [progress, setProgress] = useState(0)
@@ -151,6 +153,7 @@ const Progress = () => {
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="glass-card text-center py-12">
         <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-gray-900 mb-6">{title}</h1>
           <div className="relative w-48 h-48 mx-auto mb-6 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="45" fill="none" stroke="#eee" strokeWidth="8" />

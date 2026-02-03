@@ -50,3 +50,7 @@ vendor/
 # Temporary files
 tmp/
 temp/
+
+# Claude Code
+.opencode/
+.sisyphus/

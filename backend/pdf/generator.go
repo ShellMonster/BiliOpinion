@@ -131,6 +131,8 @@ func loadFont(pdf *fpdf.Fpdf) (string, bool) {
 		if data, err := os.ReadFile(fontPath); err == nil {
 			pdf.AddUTF8FontFromBytes("SourceHanSans", "", data)
 			pdf.AddUTF8FontFromBytes("SourceHanSans", "B", data)
+			pdf.AddUTF8FontFromBytes("SourceHanSans", "I", data)
+			pdf.AddUTF8FontFromBytes("SourceHanSans", "BI", data)
 			if pdf.Error() == nil {
 				log.Printf("[PDF] 内置字体加载成功: %s", fontPath)
 				return "SourceHanSans", false
@@ -144,26 +146,97 @@ func loadFont(pdf *fpdf.Fpdf) (string, bool) {
 
 	// 3. 自动检测系统中文字体
 	systemFonts := getSystemChineseFonts()
-	log.Printf("[PDF] 找到 %d 个可用系统字体", len(systemFonts))
+	boldFonts := getSystemBoldFonts()
+	log.Printf("[PDF] 找到 %d 个可用系统字体，%d 个粗体字体", len(systemFonts), len(boldFonts))
+
+	// 先尝试加载普通字体
+	fontData := []byte{}
+	fontLoaded := false
 	for _, fontPath := range systemFonts {
 		log.Printf("[PDF] 尝试加载字体: %s", fontPath)
 		if data, err := os.ReadFile(fontPath); err == nil {
+			fontData = data
 			pdf.AddUTF8FontFromBytes("SystemChinese", "", data)
-			pdf.AddUTF8FontFromBytes("SystemChinese", "B", data)
 			if pdf.Error() == nil {
-				log.Printf("[PDF] 字体加载成功: %s", fontPath)
-				return "SystemChinese", false
+				log.Printf("[PDF] 普通字体加载成功: %s", fontPath)
+				fontLoaded = true
+				break
 			}
-			log.Printf("[PDF] 字体加载失败: %s, 错误: %v", fontPath, pdf.Error())
 			pdf.ClearError()
-		} else {
-			log.Printf("[PDF] 读取字体文件失败: %s, 错误: %v", fontPath, err)
 		}
 	}
+
+	// 尝试加载粗体字体（可能使用不同的字体文件）
+	boldLoaded := false
+	if len(boldFonts) > 0 && fontLoaded {
+		for _, fontPath := range boldFonts {
+			log.Printf("[PDF] 尝试加载粗体字体: %s", fontPath)
+			if data, err := os.ReadFile(fontPath); err == nil {
+				pdf.AddUTF8FontFromBytes("SystemChinese", "B", data)
+				pdf.AddUTF8FontFromBytes("SystemChinese", "BI", data)
+				if pdf.Error() == nil {
+					log.Printf("[PDF] 粗体字体加载成功: %s", fontPath)
+					boldLoaded = true
+					break
+				}
+				pdf.ClearError()
+			}
+		}
+	}
+
+	// 如果粗体加载失败，使用普通字体模拟
+	if fontLoaded && !boldLoaded && len(fontData) > 0 {
+		pdf.AddUTF8FontFromBytes("SystemChinese", "B", fontData)
+		pdf.AddUTF8FontFromBytes("SystemChinese", "I", fontData)
+		pdf.AddUTF8FontFromBytes("SystemChinese", "BI", fontData)
+		log.Printf("[PDF] 使用普通字体模拟粗体/斜体")
+	}
+
+	if fontLoaded {
+		return "SystemChinese", false
+	}
+
 	log.Printf("[PDF] 警告: 所有中文字体加载失败，将使用Arial（可能导致中文乱码）")
 
 	// 3. 回退到英文字体
 	return "Arial", true
+}
+
+// getSystemBoldFonts 返回系统粗体中文字体路径列表
+func getSystemBoldFonts() []string {
+	var fonts []string
+
+	// macOS 粗体字体
+	macFonts := []string{
+		"/System/Library/Fonts/STHeiti Medium.ttc",   // 华文黑体中粗
+		"/System/Library/Fonts/Hiragino Sans GB.ttc", // 冬青黑体
+	}
+	fonts = append(fonts, macFonts...)
+
+	// Windows 粗体字体
+	winFonts := []string{
+		"C:\\Windows\\Fonts\\msyhbd.ttc",  // 微软雅黑粗体
+		"C:\\Windows\\Fonts\\simhei.ttf",  // 黑体（本身就是粗体）
+	}
+	fonts = append(fonts, winFonts...)
+
+	// Linux 粗体字体
+	linuxFonts := []string{
+		"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+		"/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+		"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Bold.ttc",
+	}
+	fonts = append(fonts, linuxFonts...)
+
+	// 过滤存在的字体文件
+	var existingFonts []string
+	for _, f := range fonts {
+		if _, err := os.Stat(f); err == nil {
+			existingFonts = append(existingFonts, f)
+		}
+	}
+
+	return existingFonts
 }
 
 // getSystemChineseFonts 返回系统中文字体路径列表（按优先级排序）
@@ -538,36 +611,234 @@ func drawRecommendation(pdf *fpdf.Fpdf, family string, reportData *report.Report
 	pageW, _ := pdf.GetPageSize()
 	usableW := pageW - left - right
 
+	// 第一遍：解析所有块，计算总高度
+	blocks := parseMarkdownBlocks(text)
+	totalH := 0.0
+	for _, block := range blocks {
+		totalH += estimateBlockHeight(pdf, family, block, usableW-4)
+	}
+	// 加上内边距
+	totalH += 4
+	if totalH < 20 {
+		totalH = 20
+	}
+
 	// 绘制背景框
 	y := pdf.GetY()
-	lines := strings.Split(text, "\n")
-	estimatedH := float64(len(lines)) * 6.5
-	if estimatedH < 20 {
-		estimatedH = 20
-	}
-	pdf.Rect(left, y, usableW, estimatedH, "FD")
+	pdf.Rect(left, y, usableW, totalH, "FD")
 
-	// 逐行解析并渲染 Markdown
+	// 第二遍：渲染所有块
 	pdf.SetXY(left+2, y+2) // 添加内边距
+	for _, block := range blocks {
+		drawMarkdownBlock(pdf, family, block, usableW-4)
+	}
+}
+
+// markdownBlock 表示 Markdown 块级元素
+type markdownBlock struct {
+	Type  string // "heading", "paragraph", "list", "quote", "empty"
+	Text  string
+	Level int     // 标题级别
+}
+
+// parseMarkdownBlocks 解析 Markdown 文本为块级元素
+func parseMarkdownBlocks(text string) []markdownBlock {
+	lines := strings.Split(text, "\n")
+	var blocks []markdownBlock
+	var currentList []string
+	var currentQuote []string
+
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			pdf.Ln(3) // 空行间距
+		trimmed := strings.TrimSpace(line)
+
+		// 空行
+		if trimmed == "" {
+			if len(currentList) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "list",
+					Text: strings.Join(currentList, "\n"),
+				})
+				currentList = nil
+			}
+			if len(currentQuote) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "quote",
+					Text: strings.Join(currentQuote, "\n"),
+				})
+				currentQuote = nil
+			}
+			blocks = append(blocks, markdownBlock{Type: "empty"})
 			continue
 		}
 
-		// 检查是否为列表项
-		if strings.HasPrefix(line, "- ") {
-			// 移除 "- " 前缀
-			line = strings.TrimPrefix(line, "- ")
-			// 绘制列表项
-			drawStyledText(pdf, family, "• "+line, usableW-4, 6.5, 4) // 添加缩进
-		} else {
-			// 普通段落
-			drawStyledText(pdf, family, line, usableW-4, 6.5, 2)
+		// 标题 ## 或 ###
+		if strings.HasPrefix(trimmed, "##") {
+			if len(currentList) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "list",
+					Text: strings.Join(currentList, "\n"),
+				})
+				currentList = nil
+			}
+			if len(currentQuote) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "quote",
+					Text: strings.Join(currentQuote, "\n"),
+				})
+				currentQuote = nil
+			}
+			level := 0
+			for _, c := range trimmed {
+				if c == '#' {
+					level++
+				} else {
+					break
+				}
+			}
+			content := strings.TrimSpace(trimmed[level:])
+			blocks = append(blocks, markdownBlock{
+				Type:  "heading",
+				Text:  content,
+				Level: level,
+			})
+			continue
 		}
-		// 修复：drawStyledText 内部已确保换行，这里只需添加段落间小间距
-		pdf.Ln(0.2) // 小间距分隔段落
+
+		// 引用 >
+		if strings.HasPrefix(trimmed, ">") {
+			if len(currentList) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "list",
+					Text: strings.Join(currentList, "\n"),
+				})
+				currentList = nil
+			}
+			content := strings.TrimSpace(trimmed[1:])
+			currentQuote = append(currentQuote, content)
+			continue
+		}
+
+		// 列表 -
+		if strings.HasPrefix(trimmed, "-") {
+			if len(currentQuote) > 0 {
+				blocks = append(blocks, markdownBlock{
+					Type: "quote",
+					Text: strings.Join(currentQuote, "\n"),
+				})
+				currentQuote = nil
+			}
+			content := strings.TrimSpace(trimmed[1:])
+			currentList = append(currentList, content)
+			continue
+		}
+
+		// 普通段落
+		if len(currentList) > 0 {
+			blocks = append(blocks, markdownBlock{
+				Type: "list",
+				Text: strings.Join(currentList, "\n"),
+			})
+			currentList = nil
+		}
+		if len(currentQuote) > 0 {
+			blocks = append(blocks, markdownBlock{
+				Type: "quote",
+				Text: strings.Join(currentQuote, "\n"),
+			})
+			currentQuote = nil
+		}
+		blocks = append(blocks, markdownBlock{
+			Type: "paragraph",
+			Text: trimmed,
+		})
+	}
+
+	// 处理最后的块
+	if len(currentList) > 0 {
+		blocks = append(blocks, markdownBlock{
+			Type: "list",
+			Text: strings.Join(currentList, "\n"),
+		})
+	}
+	if len(currentQuote) > 0 {
+		blocks = append(blocks, markdownBlock{
+			Type: "quote",
+			Text: strings.Join(currentQuote, "\n"),
+		})
+	}
+
+	return blocks
+}
+
+// estimateBlockHeight 估算块的高度
+func estimateBlockHeight(pdf *fpdf.Fpdf, family string, block markdownBlock, maxW float64) float64 {
+	setFont(pdf, family, "", 11)
+	switch block.Type {
+	case "heading":
+		setFont(pdf, family, "B", 13)
+		// 估算标题行数
+		textW := pdf.GetStringWidth(block.Text)
+		lines := int(textW/maxW) + 1
+		return float64(lines) * 7 + 2
+	case "paragraph":
+		textW := pdf.GetStringWidth(block.Text)
+		lines := int(textW/maxW) + 1
+		return float64(lines) * 6.5 + 1
+	case "list":
+		items := strings.Count(block.Text, "\n") + 1
+		return float64(items) * 6.5 + 1
+	case "quote":
+		textW := pdf.GetStringWidth(block.Text)
+		lines := int(textW/(maxW-4)) + 1
+		return float64(lines) * 6 + 2
+	case "empty":
+		return 3
+	default:
+		return 6.5
+	}
+}
+
+// drawMarkdownBlock 绘制 Markdown 块
+func drawMarkdownBlock(pdf *fpdf.Fpdf, family string, block markdownBlock, maxW float64) {
+	left, _, _, _ := pdf.GetMargins()
+
+	switch block.Type {
+	case "empty":
+		pdf.Ln(3)
+
+	case "heading":
+		pdf.SetTextColor(30, 41, 59)
+		setFont(pdf, family, "B", 13)
+		drawStyledText(pdf, family, block.Text, maxW, 7, 0)
+		pdf.Ln(1)
+
+	case "paragraph":
+		pdf.SetTextColor(17, 24, 39)
+		setFont(pdf, family, "", 11)
+		drawStyledText(pdf, family, block.Text, maxW, 6.5, 2)
+		pdf.Ln(0.5)
+
+	case "list":
+		pdf.SetTextColor(17, 24, 39)
+		setFont(pdf, family, "", 11)
+		items := strings.Split(block.Text, "\n")
+		for _, item := range items {
+			drawStyledText(pdf, family, "• "+item, maxW, 6.5, 4)
+			pdf.Ln(0.3)
+		}
+
+	case "quote":
+		// 绘制引用背景
+		x := pdf.GetX()
+		y := pdf.GetY()
+		pdf.SetFillColor(243, 244, 246)
+		pdf.Rect(left+2, y, maxW, 6, "FD")
+		pdf.SetXY(x+4, y+1)
+
+		pdf.SetTextColor(71, 85, 105)
+		setFont(pdf, family, "I", 10)
+		drawStyledText(pdf, family, block.Text, maxW-8, 5.5, 2)
+		pdf.Ln(1)
 	}
 }
 
@@ -726,12 +997,23 @@ func setFont(pdf *fpdf.Fpdf, family, style string, size float64) {
 	pdf.SetFont(family, style, size)
 	if pdf.Error() != nil {
 		pdf.ClearError()
-		// 如果是有样式的字体失败，尝试无样式版本
+		// 如果是有样式的字体失败，尝试无样式版本+模拟粗体
 		if style != "" {
 			pdf.SetFont(family, "", size)
 			if pdf.Error() != nil {
 				pdf.ClearError()
-				pdf.SetFont("Arial", "", size)
+				pdf.SetFont("Arial", style, size)
+				if pdf.Error() != nil {
+					pdf.ClearError()
+					pdf.SetFont("Arial", "", size)
+				}
+			} else {
+				// 如果中文字体不支持粗体样式，使用模拟粗体（增加字重）
+				if strings.Contains(style, "B") {
+					// 设置文本渲染模式为填充来实现粗体效果
+					// 注意：fpdf 不直接支持模拟粗体，这里通过字体大小微调实现视觉效果
+					// 或者可以接受当前无粗体状态，因为中文字体通常字重已经足够
+				}
 			}
 		} else {
 			pdf.SetFont("Arial", "", size)

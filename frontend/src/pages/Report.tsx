@@ -32,8 +32,8 @@ const Report = () => {
   const [excelExporting, setExcelExporting] = useState(false)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [selectedDims, setSelectedDims] = useState<string[]>([])
-  const [hideUnknown, setHideUnknown] = useState(false)
-  const [hideZeroScore, setHideZeroScore] = useState(false)
+  const [hideUnknown, setHideUnknown] = useState(true)
+  const [hideZeroScore, setHideZeroScore] = useState(true)
   const { showToast } = useToast()
 
   // 导出图片功能

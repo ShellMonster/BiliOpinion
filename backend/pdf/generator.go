@@ -566,13 +566,17 @@ func drawRecommendation(pdf *fpdf.Fpdf, family string, reportData *report.Report
 			// 普通段落
 			drawStyledText(pdf, family, line, usableW-4, 6.5, 2)
 		}
-		pdf.Ln(1) // 行间距
+		// 修复：减小行间距，避免双重间距（drawStyledText内部可能已换行）
+		pdf.Ln(0.5) // 行间距从1改为0.5
 	}
 }
 
 // drawStyledText 解析并渲染带有 Markdown 样式的文本
 // 支持 **bold**、*italic* 和混合样式
 func drawStyledText(pdf *fpdf.Fpdf, family, text string, maxW, lineH, indent float64) {
+	// 获取左边距，用于换行时重置X坐标
+	left, _, _, _ := pdf.GetMargins()
+
 	x := pdf.GetX() + indent
 	y := pdf.GetY()
 	pdf.SetXY(x, y)
@@ -582,16 +586,15 @@ func drawStyledText(pdf *fpdf.Fpdf, family, text string, maxW, lineH, indent flo
 
 	currentX := x
 	for _, seg := range segments {
-		// 设置字体样式
+		// 先设置字体样式，再计算宽度（确保粗体宽度准确）
 		setFont(pdf, family, seg.style, 11)
-
-		// 计算文本宽度
 		textW := pdf.GetStringWidth(seg.text)
 
 		// 检查是否需要换行
 		if currentX+textW > x+maxW && currentX > x {
 			pdf.Ln(lineH)
-			currentX = x
+			// 修复：重置到左边距+缩进，而不是初始位置x
+			currentX = left + indent
 			pdf.SetX(currentX)
 		}
 

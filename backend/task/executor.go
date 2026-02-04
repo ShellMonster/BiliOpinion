@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -369,6 +370,22 @@ func (e *Executor) loadSettings() (*AppSettings, error) {
 	}
 	if settings.BilibiliCookie == "" {
 		return nil, fmt.Errorf("请先配置B站Cookie")
+	}
+
+	// 读取抓取并发数配置
+	scrapeMaxConcurrency := getSettingValue(models.SettingKeyScrapeMaxConcurrency)
+	if scrapeMaxConcurrency != "" {
+		if val, err := strconv.Atoi(scrapeMaxConcurrency); err == nil && val > 0 {
+			e.config.MaxConcurrency = val
+		}
+	}
+
+	// 读取AI并发数配置
+	aiMaxConcurrency := getSettingValue(models.SettingKeyAIMaxConcurrency)
+	if aiMaxConcurrency != "" {
+		if val, err := strconv.Atoi(aiMaxConcurrency); err == nil && val > 0 {
+			e.config.AIBatchSize = val
+		}
 	}
 
 	return settings, nil

@@ -32,10 +32,19 @@ export const BrandRadarChart: React.FC<BrandRadarChartProps> = ({ data }) => {
         max: 100
       })),
       splitNumber: 4,
+      radius: '65%', // 减小雷达图半径，给外部标签留更多空间
+      center: ['50%', '50%'],
       name: {
         textStyle: {
           color: '#6b7280',
-          fontSize: 11
+          fontSize: 10 // 减小字体
+        },
+        formatter: (value: string) => {
+          // 长文本换行处理，每行最多4个字符
+          if (value.length > 4) {
+            return value.slice(0, 4) + '\n' + value.slice(4);
+          }
+          return value;
         }
       },
       splitLine: {
@@ -77,5 +86,10 @@ export const BrandRadarChart: React.FC<BrandRadarChartProps> = ({ data }) => {
     }]
   }), [data, colors]);
 
-  return <ReactECharts option={option} style={{ height: '320px' }} />;
+  return (
+    <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">品牌维度对比</h3>
+      <ReactECharts option={option} style={{ height: '320px' }} />
+    </div>
+  );
 };

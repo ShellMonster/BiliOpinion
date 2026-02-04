@@ -159,8 +159,9 @@ export const BrandNetwork: React.FC<BrandNetworkProps> = ({ data }) => {
             formatter: '{b}'
           },
           force: {
-            repulsion: 300, // 节点之间的斥力因子
-            edgeLength: [50, 150] // 边的两个节点之间的距离
+            repulsion: 200, // 减小斥力，使节点更紧凑
+            edgeLength: [80, 120], // 调整边长范围，更均匀
+            gravity: 0.1 // 添加向心力，防止节点过于分散
           },
           lineStyle: {
             color: 'source',

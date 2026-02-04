@@ -78,10 +78,11 @@ export const SentimentPie: React.FC<SentimentPieProps> = ({ data, title = 'æƒ…æ„
   }, [data, title]);
 
   return (
-    <div className="w-full h-[300px] bg-white rounded-lg p-4">
-      <ReactECharts 
-        option={option} 
-        style={{ height: '100%', width: '100%' }}
+    <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+      <ReactECharts
+        option={option}
+        style={{ height: '300px', width: '100%' }}
         opts={{ renderer: 'svg' }}
       />
     </div>

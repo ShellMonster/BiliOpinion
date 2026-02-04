@@ -90,13 +90,16 @@ export const KeywordCloud: React.FC<KeywordCloudProps> = ({ data }) => {
   }
 
   return (
-    <div className="w-full h-[400px]">
-      <ReactECharts
-        option={chartOption}
-        style={{ height: '100%', width: '100%' }}
-        notMerge={true}
-        lazyUpdate={true}
-      />
+    <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">关键词云</h3>
+      <div className="h-[400px]">
+        <ReactECharts
+          option={chartOption}
+          style={{ height: '100%', width: '100%' }}
+          notMerge={true}
+          lazyUpdate={true}
+        />
+      </div>
     </div>
   );
 };

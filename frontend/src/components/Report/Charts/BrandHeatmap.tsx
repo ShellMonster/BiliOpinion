@@ -50,10 +50,10 @@ export const BrandHeatmap: React.FC<BrandHeatmapProps> = ({ data }) => {
         }
       },
       grid: {
-        height: '70%',
+        height: '65%',
         top: '10%',
-        right: '10%',
-        left: '15%' // 留出空间给品牌名称
+        right: '5%',
+        left: '22%' // 增加空间给品牌名称，避免截断
       },
       xAxis: {
         type: 'category',
@@ -115,7 +115,8 @@ export const BrandHeatmap: React.FC<BrandHeatmapProps> = ({ data }) => {
   }, [data]);
 
   return (
-    <div className="w-full bg-white rounded-lg p-4">
+    <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">品牌维度热力图</h3>
       <ReactECharts option={option} style={{ height: '400px', width: '100%' }} />
     </div>
   );

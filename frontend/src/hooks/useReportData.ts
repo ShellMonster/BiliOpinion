@@ -72,9 +72,10 @@ export interface ReportData {
   top_comments?: Record<string, TypicalComment[]>
   bad_comments?: Record<string, TypicalComment[]>
   brand_analysis?: Record<string, BrandAnalysis>
-  sentiment_distribution?: Record<string, SentimentStats>
+  sentiment_distribution?: SentimentStats
   video_sources?: VideoSource[]
   keywords?: KeywordItem[]
+  keyword_frequency?: KeywordItem[]
 }
 
 export interface ApiResponse {

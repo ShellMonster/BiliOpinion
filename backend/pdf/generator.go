@@ -566,8 +566,8 @@ func drawRecommendation(pdf *fpdf.Fpdf, family string, reportData *report.Report
 			// 普通段落
 			drawStyledText(pdf, family, line, usableW-4, 6.5, 2)
 		}
-		// 修复：减小行间距，避免双重间距（drawStyledText内部可能已换行）
-		pdf.Ln(0.5) // 行间距从1改为0.5
+		// 修复：drawStyledText 内部已确保换行，这里只需添加段落间小间距
+		pdf.Ln(0.2) // 小间距分隔段落
 	}
 }
 
@@ -602,6 +602,9 @@ func drawStyledText(pdf *fpdf.Fpdf, family, text string, maxW, lineH, indent flo
 		pdf.CellFormat(textW, lineH, seg.text, "", 0, "L", false, 0, "")
 		currentX += textW
 	}
+
+	// 修复：确保结束后换到新行，避免下一次调用时位置错乱
+	pdf.Ln(lineH)
 }
 
 // textSegment 表示一个带样式的文本段

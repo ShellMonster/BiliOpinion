@@ -16,8 +16,10 @@ type Settings struct {
 
 // 常用配置键常量
 const (
-	SettingKeyAIAPIKey       = "ai_api_key"      // OpenAI API Key
-	SettingKeyAIAPIBase      = "ai_api_base"     // API Base URL
-	SettingKeyAIModel        = "ai_model"        // 模型名称
-	SettingKeyBilibiliCookie = "bilibili_cookie" // B站完整Cookie字符串
+	SettingKeyAIAPIKey             = "ai_api_key"             // OpenAI API Key
+	SettingKeyAIAPIBase            = "ai_api_base"            // API Base URL
+	SettingKeyAIModel              = "ai_model"               // 模型名称
+	SettingKeyBilibiliCookie       = "bilibili_cookie"        // B站完整Cookie字符串
+	SettingKeyScrapeMaxConcurrency = "scrape_max_concurrency" // 抓取并发数
+	SettingKeyAIMaxConcurrency     = "ai_max_concurrency"     // AI并发数
 )

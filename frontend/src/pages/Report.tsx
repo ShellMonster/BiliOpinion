@@ -43,24 +43,36 @@ const Report = () => {
       showToast('未找到报告内容', 'error')
       return
     }
-    if (!data) return
+    if (!data) {
+      showToast('报告数据未加载', 'error')
+      return
+    }
+
+    console.log('[Image] 开始导出，容器大小:', reportContainer.scrollWidth, 'x', reportContainer.scrollHeight)
 
     setImageExporting(true)
     try {
       const canvas = await html2canvas(reportContainer, {
         scale: 2,
         useCORS: true,
-        allowTaint: true
+        allowTaint: true,
+        logging: true,
       })
+      
+      console.log('[Image] Canvas生成成功:', canvas.width, 'x', canvas.height)
       
       const link = document.createElement('a')
       link.download = `报告_${data.category}_${id}.png`
       link.href = canvas.toDataURL('image/png')
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
+      
+      console.log('[Image] 导出成功')
       showToast('图片导出成功', 'success')
     } catch (error) {
-      console.error('导出图片失败:', error)
-      showToast('导出图片失败', 'error')
+      console.error('[Image] 导出失败:', error)
+      showToast(`导出图片失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
     } finally {
       setImageExporting(false)
     }
@@ -74,11 +86,18 @@ const Report = () => {
       return
     }
 
+    console.log('[Excel] 开始导出，数据量:', {
+      rankings: data.rankings?.length,
+      modelRankings: data.model_rankings?.length,
+      dimensions: data.dimensions?.length
+    })
+
     setExcelExporting(true)
     try {
       const wb = XLSX.utils.book_new()
       
       // 1. 品牌排名表
+      console.log('[Excel] 创建品牌排名表')
       const brandHeaders = ['排名', '品牌', '综合得分', ...data.dimensions.map(d => d.name)]
       const brandData = data.rankings.map(r => [
         r.rank,
@@ -87,13 +106,13 @@ const Report = () => {
         ...data.dimensions.map(d => (r.scores[d.name] || 0).toFixed(1))
       ])
       const brandWs = XLSX.utils.aoa_to_sheet([brandHeaders, ...brandData])
-      // 设置列宽
       const brandCols = [{ wch: 6 }, { wch: 15 }, { wch: 10 }, ...data.dimensions.map(() => ({ wch: 12 }))]
       brandWs['!cols'] = brandCols
       XLSX.utils.book_append_sheet(wb, brandWs, '品牌排名')
       
       // 2. 型号排名表
       if (data.model_rankings && data.model_rankings.length > 0) {
+        console.log('[Excel] 创建型号排名表')
         const modelHeaders = ['排名', '型号', '品牌', '综合得分', '评论数', ...data.dimensions.map(d => d.name)]
         const modelData = data.model_rankings.map(r => [
           r.rank,
@@ -110,6 +129,7 @@ const Report = () => {
       }
 
       // 3. 维度说明
+      console.log('[Excel] 创建维度说明表')
       const dimHeaders = ['维度名称', '维度说明']
       const dimData = data.dimensions.map(d => [d.name, d.description])
       const dimWs = XLSX.utils.aoa_to_sheet([dimHeaders, ...dimData])
@@ -118,17 +138,21 @@ const Report = () => {
 
       // 4. 购买建议
       if (data.recommendation) {
+        console.log('[Excel] 创建购买建议表')
         const recWs = XLSX.utils.aoa_to_sheet([['购买建议'], [data.recommendation]])
         recWs['!cols'] = [{ wch: 100 }]
         XLSX.utils.book_append_sheet(wb, recWs, '购买建议')
       }
       
       const dateStr = new Date().toISOString().split('T')[0]
-      XLSX.writeFile(wb, `报告_${data.category}_${id}_${dateStr}.xlsx`)
+      const filename = `报告_${data.category}_${id}_${dateStr}.xlsx`
+      console.log('[Excel] 保存文件:', filename)
+      XLSX.writeFile(wb, filename)
+      console.log('[Excel] 导出成功')
       showToast('Excel导出成功', 'success')
     } catch (error) {
-      console.error('导出Excel失败:', error)
-      showToast('导出Excel失败', 'error')
+      console.error('[Excel] 导出失败:', error)
+      showToast(`导出Excel失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
     } finally {
       setExcelExporting(false)
     }

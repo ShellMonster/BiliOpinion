@@ -7,6 +7,7 @@ import (
 	"bilibili-analyzer/backend/report"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -55,15 +56,24 @@ func HandleExportPDF(c *gin.Context) {
 
 	var reportData report.ReportData
 	if err := json.Unmarshal([]byte(reportModel.ReportData), &reportData); err != nil {
+		log.Printf("[PDF] 解析报告数据失败: %v", err)
+		dataPreview := reportModel.ReportData
+		if len(dataPreview) > 500 {
+			dataPreview = dataPreview[:500]
+		}
+		log.Printf("[PDF] 报告数据内容前500字符: %s", dataPreview)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "解析报告数据失败"})
 		return
 	}
 
+	log.Printf("[PDF] 开始生成PDF，报告ID: %d, 类目: %s", reportModel.ID, reportData.Category)
 	pdfBytes, err := pdf.GeneratePDF(&reportData, reportModel.ID)
 	if err != nil {
+		log.Printf("[PDF] 生成PDF失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("生成PDF失败: %v", err)})
 		return
 	}
+	log.Printf("[PDF] PDF生成成功，大小: %d bytes", len(pdfBytes))
 
 	filename := fmt.Sprintf("report_%d.pdf", reportModel.ID)
 	c.Header("Content-Type", "application/pdf")

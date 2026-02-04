@@ -40,6 +40,7 @@ type TaskConfig struct {
 	MaxCommentsPerVideo   int // 每个视频最大评论数（默认100）
 	MaxConcurrency        int // 最大并发数（默认3）
 	AIBatchSize           int // AI分析批次大小（默认5）
+	AIConcurrency         int // AI分析并发数（默认10）
 	VideoDateRangeMonths  int // 视频时间范围（月），0表示不限制，默认24（2年）
 	MinVideoDuration      int // 最小视频时长（秒），0表示不过滤
 	MaxComments           int // 最大分析评论数（默认500）
@@ -56,6 +57,7 @@ func DefaultTaskConfig() TaskConfig {
 		MaxCommentsPerVideo:   200,
 		MaxConcurrency:        5,   // 从3增加到5，提升抓取速度
 		AIBatchSize:           10,  // 从5增加到10，减少AI API调用次数
+		AIConcurrency:         10,  // AI分析并发数，同时发送的AI请求数
 		VideoDateRangeMonths:  0,   // 默认不限时间
 		MinVideoDuration:      30,  // 默认过滤30秒以下短视频
 		MaxComments:           500, // 默认分析500条评论
@@ -384,7 +386,7 @@ func (e *Executor) loadSettings() (*AppSettings, error) {
 	aiMaxConcurrency := getSettingValue(models.SettingKeyAIMaxConcurrency)
 	if aiMaxConcurrency != "" {
 		if val, err := strconv.Atoi(aiMaxConcurrency); err == nil && val > 0 {
-			e.config.AIBatchSize = val
+			e.config.AIConcurrency = val
 		}
 	}
 
@@ -566,7 +568,7 @@ func (e *Executor) analyzeComments(
 		fmt.Sprintf("正在AI分析 %d 条评论...", len(inputs)))
 
 	// 3. AI 分析
-	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(ctx, inputs, dimensions, e.config.AIBatchSize)
+	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(ctx, inputs, dimensions, e.config.AIConcurrency)
 	if err != nil {
 		return nil, fmt.Errorf("AI分析失败: %w", err)
 	}

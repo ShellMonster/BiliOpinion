@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"golang.org/x/sync/semaphore"
 )
 
 // 注意：Dimension 类型已在 keyword.go 中定义，此处复用
@@ -249,56 +251,93 @@ type CommentInput struct {
 }
 
 // AnalyzeCommentsWithRateLimit 带速率限制的批量分析（优化版）
-// 使用批量合并策略，大幅减少 API 调用次数
+// 使用批量合并策略和并发控制，大幅减少 API 调用次数并提高处理速度
 // 参数：
 //   - ctx: 上下文
 //   - comments: 评论列表
 //   - dimensions: 评价维度
-//   - batchSize: 每批处理的评论数量（已废弃，使用动态批次计算）
+//   - concurrency: 并发数（控制同时发送的AI请求数）
 //
 // 返回：
 //   - []CommentAnalysisResult: 分析结果
 //   - error: 错误信息
-func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []CommentInput, dimensions []Dimension, batchSize int) ([]CommentAnalysisResult, error) {
+func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []CommentInput, dimensions []Dimension, concurrency int) ([]CommentAnalysisResult, error) {
 	// 使用动态批次计算
 	config := DefaultBatchConfig()
-	if batchSize > 0 && batchSize < config.MaxItemsPerBatch {
-		config.MaxItemsPerBatch = batchSize
-	}
-
 	batches := CalculateBatches(comments, &config)
-	log.Printf("[AI] 评论分析：共 %d 条评论，分为 %d 批处理", len(comments), len(batches))
+	log.Printf("[AI] 评论分析：共 %d 条评论，分为 %d 批处理，并发数: %d", len(comments), len(batches), concurrency)
 
-	var allResults []CommentAnalysisResult
+	// 并发控制
+	sem := semaphore.NewWeighted(int64(concurrency))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	// 预分配结果存储（按批次索引）
+	batchResults := make([][]CommentAnalysisResult, len(batches))
+	var completedCount int
 
 	for i, batch := range batches {
-		log.Printf("[AI] 正在分析第 %d/%d 批（%d 条评论）...", i+1, len(batches), len(batch))
-
-		// 报告进度
-		c.reportProgress("analyzing", i+1, len(batches), fmt.Sprintf("正在分析第 %d/%d 批（%d 条评论）", i+1, len(batches), len(batch)))
-
-		// 分析当前批次
-		results, err := c.AnalyzeCommentsBatchMerged(ctx, batch, dimensions)
-
-		if err != nil {
-			// 降级：使用原有的并发单条分析
-			results, err = c.AnalyzeCommentsBatch(ctx, batch, dimensions)
-			if err != nil {
-				// 如果单条分析也失败，记录错误但继续
-				for _, comment := range batch {
-					allResults = append(allResults, CommentAnalysisResult{
-						CommentID: comment.ID,
-						Content:   comment.Content,
-						Error:     err.Error(),
-					})
-				}
-				continue
-			}
+		// 检查上下文取消
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
 
+		// 获取信号量
+		if err := sem.Acquire(ctx, 1); err != nil {
+			return nil, err
+		}
+
+		wg.Add(1)
+		go func(idx int, b []CommentInput) {
+			defer wg.Done()
+			defer sem.Release(1)
+
+			log.Printf("[AI] 正在分析第 %d/%d 批（%d 条评论）...", idx+1, len(batches), len(b))
+
+			// 尝试批量合并分析
+			results, err := c.AnalyzeCommentsBatchMerged(ctx, b, dimensions)
+			if err != nil {
+				// 降级：使用原有的并发单条分析
+				log.Printf("[AI] 批量分析失败，降级到单条分析: %v", err)
+				results, err = c.AnalyzeCommentsBatch(ctx, b, dimensions)
+				if err != nil {
+					// 如果单条分析也失败，记录错误但继续
+					log.Printf("[AI] 单条分析也失败: %v", err)
+					results = make([]CommentAnalysisResult, len(b))
+					for j, comment := range b {
+						results[j] = CommentAnalysisResult{
+							CommentID: comment.ID,
+							Content:   comment.Content,
+							Error:     err.Error(),
+						}
+					}
+				}
+			}
+
+			// 线程安全地存储结果和更新进度
+			mu.Lock()
+			batchResults[idx] = results
+			completedCount++
+			c.reportProgress("analyzing", completedCount, len(batches),
+				fmt.Sprintf("正在分析第 %d/%d 批（%d 条评论）", completedCount, len(batches), len(b)))
+			mu.Unlock()
+
+			log.Printf("[AI] 完成第 %d/%d 批分析", completedCount, len(batches))
+		}(i, batch)
+	}
+
+	// 等待所有goroutine完成
+	wg.Wait()
+
+	// 按顺序合并结果
+	var allResults []CommentAnalysisResult
+	for _, results := range batchResults {
 		allResults = append(allResults, results...)
 	}
 
+	log.Printf("[AI] 所有批次分析完成，共 %d 条结果", len(allResults))
 	return allResults, nil
 }
 

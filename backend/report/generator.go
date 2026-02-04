@@ -399,7 +399,7 @@ func generateRankings(brands []string, dimensions []ai.Dimension, scores map[str
 
 		overallScore := 0.0
 		if count > 0 {
-			overallScore = total / float64(count)
+			overallScore = math.Round((total/float64(count))*10) / 10
 		}
 
 		rankings = append(rankings, BrandRanking{

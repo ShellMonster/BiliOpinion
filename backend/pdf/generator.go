@@ -4,6 +4,7 @@ import (
 	"bilibili-analyzer/backend/report"
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -119,18 +120,47 @@ func loadFont(pdf *fpdf.Fpdf) (string, bool) {
 		}
 	}
 
-	// 2. 自动检测系统中文字体
+	// 2. 使用项目内置的中文字体（跨平台兼容）
+	builtinFontPaths := []string{
+		"./fonts/siyuan.ttf",
+		"../fonts/siyuan.ttf",
+		"fonts/siyuan.ttf",
+	}
+	for _, fontPath := range builtinFontPaths {
+		log.Printf("[PDF] 尝试加载内置字体: %s", fontPath)
+		if data, err := os.ReadFile(fontPath); err == nil {
+			pdf.AddUTF8FontFromBytes("SourceHanSans", "", data)
+			pdf.AddUTF8FontFromBytes("SourceHanSans", "B", data)
+			if pdf.Error() == nil {
+				log.Printf("[PDF] 内置字体加载成功: %s", fontPath)
+				return "SourceHanSans", false
+			}
+			log.Printf("[PDF] 内置字体加载失败: %v", pdf.Error())
+			pdf.ClearError()
+		} else {
+			log.Printf("[PDF] 读取内置字体失败: %s, 错误: %v", fontPath, err)
+		}
+	}
+
+	// 3. 自动检测系统中文字体
 	systemFonts := getSystemChineseFonts()
+	log.Printf("[PDF] 找到 %d 个可用系统字体", len(systemFonts))
 	for _, fontPath := range systemFonts {
+		log.Printf("[PDF] 尝试加载字体: %s", fontPath)
 		if data, err := os.ReadFile(fontPath); err == nil {
 			pdf.AddUTF8FontFromBytes("SystemChinese", "", data)
 			pdf.AddUTF8FontFromBytes("SystemChinese", "B", data)
 			if pdf.Error() == nil {
+				log.Printf("[PDF] 字体加载成功: %s", fontPath)
 				return "SystemChinese", false
 			}
+			log.Printf("[PDF] 字体加载失败: %s, 错误: %v", fontPath, pdf.Error())
 			pdf.ClearError()
+		} else {
+			log.Printf("[PDF] 读取字体文件失败: %s, 错误: %v", fontPath, err)
 		}
 	}
+	log.Printf("[PDF] 警告: 所有中文字体加载失败，将使用Arial（可能导致中文乱码）")
 
 	// 3. 回退到英文字体
 	return "Arial", true

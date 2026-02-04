@@ -50,6 +50,34 @@ const Report = () => {
 
     console.log('[Image] 开始导出，容器大小:', reportContainer.scrollWidth, 'x', reportContainer.scrollHeight)
 
+    // 临时转换oklch颜色为rgb
+    const elementsWithOklch: {el: HTMLElement, originalColor: string, originalBg: string}[] = []
+    const allElements = reportContainer.querySelectorAll('*')
+    
+    allElements.forEach(el => {
+      const htmlEl = el as HTMLElement
+      const computedStyle = window.getComputedStyle(htmlEl)
+      const color = computedStyle.color
+      const bgColor = computedStyle.backgroundColor
+      
+      if (color.includes('oklch') || bgColor.includes('oklch')) {
+        elementsWithOklch.push({
+          el: htmlEl,
+          originalColor: htmlEl.style.color,
+          originalBg: htmlEl.style.backgroundColor
+        })
+        // 设置为安全的颜色
+        if (color.includes('oklch')) {
+          htmlEl.style.color = '#374151'
+        }
+        if (bgColor.includes('oklch')) {
+          htmlEl.style.backgroundColor = '#ffffff'
+        }
+      }
+    })
+    
+    console.log('[Image] 转换了', elementsWithOklch.length, '个oklch颜色元素')
+
     setImageExporting(true)
     try {
       const canvas = await html2canvas(reportContainer, {
@@ -57,6 +85,7 @@ const Report = () => {
         useCORS: true,
         allowTaint: true,
         logging: true,
+        backgroundColor: '#ffffff',
       })
       
       console.log('[Image] Canvas生成成功:', canvas.width, 'x', canvas.height)
@@ -74,6 +103,11 @@ const Report = () => {
       console.error('[Image] 导出失败:', error)
       showToast(`导出图片失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
     } finally {
+      // 恢复原始颜色
+      elementsWithOklch.forEach(({el, originalColor, originalBg}) => {
+        el.style.color = originalColor
+        el.style.backgroundColor = originalBg
+      })
       setImageExporting(false)
     }
   }

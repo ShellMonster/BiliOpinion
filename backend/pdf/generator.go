@@ -537,7 +537,21 @@ func ensureSpace(pdf *fpdf.Fpdf, needH float64) {
 }
 
 func setFont(pdf *fpdf.Fpdf, family, style string, size float64) {
+	// 尝试设置字体，如果失败则使用Arial fallback
 	pdf.SetFont(family, style, size)
+	if pdf.Error() != nil {
+		pdf.ClearError()
+		// 如果是有样式的字体失败，尝试无样式版本
+		if style != "" {
+			pdf.SetFont(family, "", size)
+			if pdf.Error() != nil {
+				pdf.ClearError()
+				pdf.SetFont("Arial", "", size)
+			}
+		} else {
+			pdf.SetFont("Arial", "", size)
+		}
+	}
 }
 
 func safeText(s string) string {

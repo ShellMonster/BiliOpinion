@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/semaphore"
 )
 
 // VideoRelevanceChecker 视频相关性检查器
@@ -136,29 +139,75 @@ func (c *VideoRelevanceChecker) BatchCheckRelevance(
 	userRequirement string,
 	concurrency int,
 ) (relevantIndices []int, irrelevantVideos []map[string]string, err error) {
-	// 并发数校验（预留参数，当前版本串行处理）
+	// 并发数校验
 	if concurrency <= 0 {
 		concurrency = 5
 	}
 
-	// 遍历所有视频标题
+	// 并发控制
+	sem := semaphore.NewWeighted(int64(concurrency))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	// 使用slice存储结果，保持顺序
+	results := make([]struct {
+		index      int
+		isRelevant bool
+		reason     string
+		err        error
+	}, len(videoTitles))
+
 	for i, title := range videoTitles {
-		// 检查单个视频的相关性
-		isRelevant, reason, checkErr := c.CheckRelevance(ctx, title, userRequirement)
-		if checkErr != nil {
-			// 出错时默认保留该视频（避免误删）
+		// 检查上下文取消
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		default:
+		}
+
+		if err := sem.Acquire(ctx, 1); err != nil {
+			return nil, nil, err
+		}
+
+		wg.Add(1)
+		go func(idx int, t string) {
+			defer wg.Done()
+			defer sem.Release(1)
+
+			isRelevant, reason, checkErr := c.CheckRelevance(ctx, t, userRequirement)
+
+			mu.Lock()
+			results[idx] = struct {
+				index      int
+				isRelevant bool
+				reason     string
+				err        error
+			}{
+				index:      idx,
+				isRelevant: isRelevant,
+				reason:     reason,
+				err:        checkErr,
+			}
+			mu.Unlock()
+		}(i, title)
+	}
+
+	wg.Wait()
+
+	// 收集结果
+	for i, result := range results {
+		if result.err != nil {
+			// 出错时默认保留
 			relevantIndices = append(relevantIndices, i)
 			continue
 		}
 
-		if isRelevant {
-			// 相关视频：记录索引
+		if result.isRelevant {
 			relevantIndices = append(relevantIndices, i)
 		} else {
-			// 不相关视频：记录详细信息用于日志
 			irrelevantVideos = append(irrelevantVideos, map[string]string{
-				"title":  title,
-				"reason": reason,
+				"title":  videoTitles[i],
+				"reason": result.reason,
 			})
 		}
 	}

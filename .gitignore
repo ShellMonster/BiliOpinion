@@ -51,6 +51,11 @@ logs/
 vendor/
 bin/
 
+# Go binaries (specific files)
+backend/backend
+backend/server
+backend/bilibili-analyzer
+
 # Temporary files
 tmp/
 temp/

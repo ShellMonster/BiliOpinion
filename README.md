@@ -2,10 +2,9 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/ShellMonster/BiliOpinion?style=flat-square)](https://github.com/ShellMonster/BiliOpinion/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://github.com/ShellMonster/BiliOpinion/blob/main/LICENSE)
-![Go](https://img.shields.io/badge/Go-1.24-00ADD8.svg?style=flat-square)
-![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square)
-![React](https://img.shields.io/badge/React-19-61DAFB.svg?style=flat-square)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square)
+![Go](https://img.shields.io/badge/Go-1.24.3-00ADD8.svg?style=flat-square)
+![React](https://img.shields.io/badge/React-19.2.0-61DAFB.svg?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6.svg?style=flat-square)
 
 > 基于B站视频评论的AI驱动的商品评价分析系统
 
@@ -82,7 +81,7 @@ B站评论区恰好是一个被忽视的宝藏：
 ```mermaid
 graph TD
     subgraph "前端 Frontend"
-        UI["用户界面<br/>Vue + TypeScript<br/>Tailwind CSS"]
+        UI["用户界面<br/>React + TypeScript<br/>Tailwind CSS + ECharts"]
     end
 
     subgraph "后端 Backend"
@@ -147,7 +146,14 @@ graph LR
         AI1 --> T5["生成搜索关键词"]
     end
 
-    subgraph "2. 评论分析 Agent"
+    subgraph "2. 视频相关性 Agent"
+        AI5["AI 相关性检查"]
+        AI5 --> F1["分析视频标题"]
+        AI5 --> F2["判断是否与需求相关"]
+        AI5 --> F3["过滤无关视频"]
+    end
+
+    subgraph "3. 评论分析 Agent"
         AI2["AI 评论分析"]
         AI2 --> A1["提取品牌和型号"]
         AI2 --> A2["各维度打分1-10"]
@@ -155,14 +161,14 @@ graph LR
         AI2 --> A4["判断优劣势"]
     end
 
-    subgraph "3. 品牌识别 Agent"
+    subgraph "4. 品牌识别 Agent"
         AI3["AI 品牌识别"]
         AI3 --> B1["识别未知品牌"]
         AI3 --> B2["型号归一化"]
         AI3 --> B3["品牌别名映射"]
     end
 
-    subgraph "4. 购买建议 Agent"
+    subgraph "5. 购买建议 Agent"
         AI4["AI 购买建议"]
         AI4 --> R1["分析品牌优劣势"]
         AI4 --> R2["对比型号表现"]
@@ -171,8 +177,11 @@ graph LR
     end
 
     USER(["用户输入"]) --> AI1
-    AI1 --> DATA["数据采集<br/>搜索+抓取"]
-    DATA --> AI2
+    AI1 --> SEARCH["搜索视频"]
+    SEARCH --> AI5
+    AI5 --> FILTER["保留相关视频"]
+    FILTER --> SCRAPE["抓取评论"]
+    SCRAPE --> AI2
     AI2 --> AI3
     AI3 --> AI4
     AI4 --> OUT(["输出报告"])
@@ -181,9 +190,12 @@ graph LR
     style AI2 fill:#fff3e0
     style AI3 fill:#fff3e0
     style AI4 fill:#fff3e0
+    style AI5 fill:#fff3e0
     style USER fill:#e1f5fe
     style OUT fill:#e8f5e9
-    style DATA fill:#e3f2fd
+    style SEARCH fill:#e3f2fd
+    style FILTER fill:#c8e6c9
+    style SCRAPE fill:#e3f2fd
 ```
 
 ---
@@ -201,13 +213,14 @@ graph LR
 ### 前端
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Vue | 3 | UI框架 |
-| TypeScript | 5 | 类型安全 |
-| Vite | 6 | 构建工具 |
-| Tailwind CSS | 4 | 样式框架 |
-| Recharts | 2 | 图表库 |
-| html2canvas | 1 | 图片导出 |
-| xlsx | 0 | Excel导出 |
+| React | 19.2.0 | UI框架 |
+| TypeScript | 5.9.3 | 类型安全 |
+| Vite | 7.2.4 | 构建工具 |
+| Tailwind CSS | 4.1.18 | 样式框架 |
+| ECharts | 5.6.0 | 图表库 |
+| Framer Motion | 12.30.0 | 动画库 |
+| html2canvas | 1.4.1 | 图片导出 |
+| xlsx | 0.18.5 | Excel导出 |
 
 ---
 

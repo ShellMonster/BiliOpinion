@@ -12,7 +12,6 @@ import { EnhancedSummary } from '../components/Report/EnhancedSummary'
 import { BrandHeatmap } from '../components/Report/Charts/BrandHeatmap'
 import { KeywordCloud } from '../components/Report/Charts/KeywordCloud'
 import { SentimentPie } from '../components/Report/Charts/SentimentPie'
-import { ScoreHistogram } from '../components/Report/Charts/ScoreHistogram'
 import { BrandNetwork } from '../components/Report/Charts/BrandNetwork'
 import { BrandCard } from '../components/Report/BrandCard'
 import { DimensionFilter } from '../components/Report/DimensionFilter'
@@ -22,7 +21,7 @@ import { DecisionTree } from '../components/Report/DecisionTree'
 import { VideoSourceList } from '../components/Report/VideoSourceList'
 import type { SentimentStats, ModelRanking } from '../types/report'
 
-type TabType = 'overview' | 'charts' | 'summary'
+type TabType = 'overview' | 'charts' | 'summary' | 'sources'
 
 const Report = () => {
   const { report, loading, error, id } = useReportData()
@@ -151,7 +150,12 @@ const Report = () => {
   if (error || !report) return <div className="min-h-screen flex items-center justify-center text-red-500">{error || '报告不存在'}</div>
 
   const data = report.data
-  const tabs = [{ key: 'overview', label: '总览' }, { key: 'charts', label: '图表' }, { key: 'summary', label: '深度总结' }]
+  const tabs = [
+    { key: 'overview', label: '总览' },
+    { key: 'charts', label: '图表' },
+    { key: 'summary', label: '深度总结' },
+    { key: 'sources', label: '数据来源' }
+  ]
   const currentDims = selectedDims.length ? selectedDims : data.dimensions.map(d => d.name)
   
   // 过滤后的数据
@@ -167,12 +171,15 @@ const Report = () => {
     return true
   })
   
-  const totalSentiment = Object.values(data.sentiment_distribution || {}).reduce((acc, curr) => ({
-    positive_count: acc.positive_count + curr.positive_count,
-    neutral_count: acc.neutral_count + curr.neutral_count,
-    negative_count: acc.negative_count + curr.negative_count,
-    positive_pct: 0, neutral_pct: 0, negative_pct: 0 
-  }), { positive_count: 0, neutral_count: 0, negative_count: 0, positive_pct: 0, neutral_pct: 0, negative_pct: 0 } as SentimentStats);
+  // 情感分布数据 - 直接使用整体统计，不需要reduce计算
+  const totalSentiment: SentimentStats = data.sentiment_distribution || {
+    positive_count: 0,
+    neutral_count: 0,
+    negative_count: 0,
+    positive_pct: 0,
+    neutral_pct: 0,
+    negative_pct: 0
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8" id="report-container">
@@ -364,10 +371,6 @@ const Report = () => {
                 </div>
               </div>
             )}
-
-            {data.video_sources && data.video_sources.length > 0 && (
-              <VideoSourceList videos={data.video_sources} />
-            )}
           </div>
         )}
 
@@ -377,10 +380,9 @@ const Report = () => {
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                <BrandRadarChart data={data} />
                <BrandScoreChart data={data} />
-               <ScoreHistogram data={data.sentiment_distribution || {}} />
                <BrandHeatmap data={data} />
                <SentimentPie data={totalSentiment} title="整体情感分布" />
-               <KeywordCloud data={data.keywords || []} />
+               <KeywordCloud data={data.keyword_frequency || []} />
              </div>
              <BrandNetwork data={data} />
              <RadarBrandSelector data={data} />
@@ -392,6 +394,20 @@ const Report = () => {
             <CompetitorCompare rankings={data.rankings} dimensions={data.dimensions} />
             <DecisionTree dimensions={data.dimensions} rankings={data.rankings} />
             <EnhancedSummary recommendation={data.recommendation} />
+          </div>
+        )}
+
+        {activeTab === 'sources' && (
+          <div className="space-y-6">
+            {data.video_sources && data.video_sources.length > 0 ? (
+              <VideoSourceList videos={data.video_sources} />
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <div className="text-center text-gray-500">
+                  暂无数据来源信息
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -208,7 +208,7 @@ func GenerateReportWithInput(input GenerateReportInput) (*ReportData, error) {
 
 		for dimName, total := range brandScores {
 			if count := dimCounts[dimName]; count > 0 {
-				brandScores[dimName] = total / float64(count)
+				brandScores[dimName] = math.Round((total/float64(count))*10) / 10
 			}
 		}
 
@@ -338,7 +338,7 @@ func generateModelRankings(analysisResults map[string][]CommentWithScore, dimens
 				sum += s
 			}
 			avg := sum / float64(len(scores))
-			avgScores[dimName] = avg
+			avgScores[dimName] = math.Round(avg*10) / 10
 			total += avg
 			dimCount++
 		}

@@ -33,6 +33,7 @@ const Report = () => {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [selectedDims, setSelectedDims] = useState<string[]>([])
   const [hideUnknown, setHideUnknown] = useState(false)
+  const [hideZeroScore, setHideZeroScore] = useState(false)
   const { showToast } = useToast()
 
   // 导出图片功能
@@ -154,13 +155,17 @@ const Report = () => {
   const currentDims = selectedDims.length ? selectedDims : data.dimensions.map(d => d.name)
   
   // 过滤后的数据
-  const filteredRankings = hideUnknown 
-    ? data.rankings?.filter(r => r.brand !== '未知') 
-    : data.rankings
+  const filteredRankings = data.rankings?.filter(r => {
+    if (hideUnknown && r.brand === '未知') return false
+    if (hideZeroScore && r.overall_score === 0) return false
+    return true
+  })
 
-  const filteredModelRankings = hideUnknown
-    ? data.model_rankings?.filter(m => m.brand !== '未知' && m.model !== '通用')
-    : data.model_rankings
+  const filteredModelRankings = data.model_rankings?.filter(m => {
+    if (hideUnknown && (m.brand === '未知' || m.model === '通用')) return false
+    if (hideZeroScore && m.overall_score === 0) return false
+    return true
+  })
   
   const totalSentiment = Object.values(data.sentiment_distribution || {}).reduce((acc, curr) => ({
     positive_count: acc.positive_count + curr.positive_count,
@@ -253,17 +258,31 @@ const Report = () => {
             <KeyStatsCards stats={data.stats || { total_videos: 0, total_comments: 0, comments_by_brand: {}}} brandCount={data.brands.length} />
             
             {/* 过滤开关 */}
-            <div className="flex items-center gap-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
-              <input
-                type="checkbox"
-                id="hideUnknown"
-                checked={hideUnknown}
-                onChange={(e) => setHideUnknown(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="hideUnknown" className="text-sm text-gray-700 cursor-pointer">
-                隐藏"未知"品牌和"通用"型号
-              </label>
+            <div className="flex items-center gap-4 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hideUnknown"
+                  checked={hideUnknown}
+                  onChange={(e) => setHideUnknown(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="hideUnknown" className="text-sm text-gray-700 cursor-pointer">
+                  隐藏"未知"品牌和"通用"型号
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hideZeroScore"
+                  checked={hideZeroScore}
+                  onChange={(e) => setHideZeroScore(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="hideZeroScore" className="text-sm text-gray-700 cursor-pointer">
+                  隐藏零分数据
+                </label>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

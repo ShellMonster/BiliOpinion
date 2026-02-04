@@ -32,6 +32,7 @@ const Report = () => {
   const [excelExporting, setExcelExporting] = useState(false)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [selectedDims, setSelectedDims] = useState<string[]>([])
+  const [hideUnknown, setHideUnknown] = useState(false)
   const { showToast } = useToast()
 
   // 导出图片功能
@@ -152,6 +153,15 @@ const Report = () => {
   const tabs = [{ key: 'overview', label: '总览' }, { key: 'charts', label: '图表' }, { key: 'summary', label: '深度总结' }]
   const currentDims = selectedDims.length ? selectedDims : data.dimensions.map(d => d.name)
   
+  // 过滤后的数据
+  const filteredRankings = hideUnknown 
+    ? data.rankings?.filter(r => r.brand !== '未知') 
+    : data.rankings
+
+  const filteredModelRankings = hideUnknown
+    ? data.model_rankings?.filter(m => m.brand !== '未知' && m.model !== '通用')
+    : data.model_rankings
+  
   const totalSentiment = Object.values(data.sentiment_distribution || {}).reduce((acc, curr) => ({
     positive_count: acc.positive_count + curr.positive_count,
     neutral_count: acc.neutral_count + curr.neutral_count,
@@ -241,12 +251,33 @@ const Report = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <KeyStatsCards stats={data.stats || { total_videos: 0, total_comments: 0, comments_by_brand: {}}} brandCount={data.brands.length} />
+            
+            {/* 过滤开关 */}
+            <div className="flex items-center gap-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
+              <input
+                type="checkbox"
+                id="hideUnknown"
+                checked={hideUnknown}
+                onChange={(e) => setHideUnknown(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="hideUnknown" className="text-sm text-gray-700 cursor-pointer">
+                隐藏"未知"品牌和"通用"型号
+              </label>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data.rankings?.map(r => <BrandCard key={r.brand} ranking={r} analysis={data.brand_analysis?.[r.brand]} onClick={() => setSelectedBrand(r.brand)} />)}
+              {filteredRankings && filteredRankings.length > 0 ? (
+                filteredRankings.map(r => <BrandCard key={r.brand} ranking={r} analysis={data.brand_analysis?.[r.brand]} onClick={() => setSelectedBrand(r.brand)} />)
+              ) : (
+                <div className="col-span-full text-center py-8 text-gray-500">
+                  没有符合条件的品牌数据
+                </div>
+              )}
             </div>
             
             {/* 型号排名 */}
-            {data.model_rankings && data.model_rankings.length > 0 && (
+            {filteredModelRankings && filteredModelRankings.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <h2 className="text-xl font-bold text-gray-800">🏆 型号排名</h2>
@@ -267,7 +298,7 @@ const Report = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {data.model_rankings.map((model: ModelRanking) => (
+                      {filteredModelRankings.map((model: ModelRanking) => (
                         <tr key={`${model.brand}-${model.model}`} className="hover:bg-gray-50">
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
@@ -303,6 +334,14 @@ const Report = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+            
+            {filteredModelRankings && filteredModelRankings.length === 0 && data.model_rankings && data.model_rankings.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <div className="text-center text-gray-500">
+                  没有符合条件的型号数据
                 </div>
               </div>
             )}

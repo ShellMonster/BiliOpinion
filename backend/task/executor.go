@@ -169,6 +169,54 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	log.Printf("[Task %s] Found %d videos", taskID, len(allVideos))
 
+	// 阶段2.5：视频相关性过滤
+	sse.PushProgress(taskID, sse.StatusSearching, 18, 100, "正在过滤不相关视频...")
+	e.updateTaskProgress(history.ID, sse.StatusSearching, 18, "正在过滤不相关视频...")
+
+	aiClient := ai.NewClient(ai.Config{
+		APIBase: settings.AIBaseURL,
+		APIKey:  settings.AIAPIKey,
+		Model:   settings.AIModel,
+	})
+
+	videoTitles := make([]string, len(allVideos))
+	for i, v := range allVideos {
+		videoTitles[i] = v.Title
+	}
+
+	relevanceChecker := ai.NewVideoRelevanceChecker(aiClient)
+	relevantIndices, irrelevantVideos, err := relevanceChecker.BatchCheckRelevance(
+		ctx,
+		videoTitles,
+		req.Requirement,
+		5,
+	)
+	if err != nil {
+		log.Printf("[Task %s] 视频相关性检查失败: %v，继续使用所有视频", taskID, err)
+	} else {
+		if len(irrelevantVideos) > 0 {
+			log.Printf("[Task %s] 过滤 %d 个不相关视频", taskID, len(irrelevantVideos))
+			for _, info := range irrelevantVideos {
+				log.Printf("[Task %s]   - 标题: %s, 理由: %s", taskID, info["title"], info["reason"])
+			}
+
+			filteredVideos := make([]bilibili.VideoInfo, 0, len(relevantIndices))
+			for _, idx := range relevantIndices {
+				filteredVideos = append(filteredVideos, allVideos[idx])
+			}
+			allVideos = filteredVideos
+			log.Printf("[Task %s] 过滤后剩余 %d 个相关视频", taskID, len(allVideos))
+		} else {
+			log.Printf("[Task %s] 所有视频均相关，无需过滤", taskID)
+		}
+	}
+
+	if len(allVideos) == 0 {
+		e.updateHistoryStatus(history.ID, models.StatusFailed)
+		sse.PushError(taskID, "过滤后没有相关视频，请尝试其他关键词")
+		return fmt.Errorf("no relevant videos found after filtering")
+	}
+
 	// 阶段3：计算按比例分配
 	commentAllocation := e.calculateProportionalAllocation(
 		allVideos,
@@ -212,12 +260,6 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 	// 阶段4：AI分析评论
 	sse.PushProgress(taskID, sse.StatusAnalyzing, 50, 100, "正在使用AI分析评论...")
 	e.updateTaskProgress(history.ID, sse.StatusAnalyzing, 50, "正在使用AI分析评论...")
-
-	aiClient := ai.NewClient(ai.Config{
-		APIBase: settings.AIBaseURL,
-		APIKey:  settings.AIAPIKey,
-		Model:   settings.AIModel,
-	})
 
 	// 设置AI分析进度回调
 	aiClient.SetProgressCallback(func(stage string, current, total int, message string) {

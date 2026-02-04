@@ -44,7 +44,7 @@ func NewClient(cfg Config) *Client {
 	}
 	// 设置默认最大并发数
 	if cfg.MaxConcurrent == 0 {
-		cfg.MaxConcurrent = 5
+		cfg.MaxConcurrent = 10
 	}
 
 	return &Client{

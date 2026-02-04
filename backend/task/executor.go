@@ -35,26 +35,32 @@ type AppSettings struct {
 
 // TaskConfig 任务配置
 type TaskConfig struct {
-	MaxVideosPerKeyword  int // 每个关键词最大视频数（默认10）
-	MaxCommentsPerVideo  int // 每个视频最大评论数（默认100）
-	MaxConcurrency       int // 最大并发数（默认3）
-	AIBatchSize          int // AI分析批次大小（默认5）
-	VideoDateRangeMonths int // 视频时间范围（月），0表示不限制，默认24（2年）
-	MinVideoDuration     int // 最小视频时长（秒），0表示不过滤
-	MaxComments          int // 最大分析评论数（默认500）
+	MaxVideosPerKeyword   int // 每个关键词最大视频数（默认10）
+	MaxCommentsPerVideo   int // 每个视频最大评论数（默认100）
+	MaxConcurrency        int // 最大并发数（默认3）
+	AIBatchSize           int // AI分析批次大小（默认5）
+	VideoDateRangeMonths  int // 视频时间范围（月），0表示不限制，默认24（2年）
+	MinVideoDuration      int // 最小视频时长（秒），0表示不过滤
+	MaxComments           int // 最大分析评论数（默认500）
+	MinVideoComments      int // 最小视频评论数过滤（默认0，表示不限制）
+	MinCommentsPerVideo   int // 每视频最少抓取数（默认10）
+	MaxCommentsPerVideoV2 int // 每视频最多抓取数（默认200）
 }
 
 // DefaultTaskConfig 默认任务配置
 // 性能优化：增加并发数和批次大小以提升分析速度
 func DefaultTaskConfig() TaskConfig {
 	return TaskConfig{
-		MaxVideosPerKeyword:  20,
-		MaxCommentsPerVideo:  200,
-		MaxConcurrency:       5,   // 从3增加到5，提升抓取速度
-		AIBatchSize:          10,  // 从5增加到10，减少AI API调用次数
-		VideoDateRangeMonths: 0,   // 默认不限时间
-		MinVideoDuration:     30,  // 默认过滤30秒以下短视频
-		MaxComments:          500, // 默认分析500条评论
+		MaxVideosPerKeyword:   20,
+		MaxCommentsPerVideo:   200,
+		MaxConcurrency:        5,   // 从3增加到5，提升抓取速度
+		AIBatchSize:           10,  // 从5增加到10，减少AI API调用次数
+		VideoDateRangeMonths:  0,   // 默认不限时间
+		MinVideoDuration:      30,  // 默认过滤30秒以下短视频
+		MaxComments:           500, // 默认分析500条评论
+		MinVideoComments:      0,   // 默认不限制视频评论数
+		MinCommentsPerVideo:   10,  // 默认每视频最少抓取10条
+		MaxCommentsPerVideoV2: 200, // 默认每视频最多抓取200条
 	}
 }
 
@@ -102,6 +108,14 @@ func NewExecutor(config *TaskConfig) *Executor {
 		cfg.MinVideoDuration = config.MinVideoDuration
 		if config.MaxComments > 0 {
 			cfg.MaxComments = config.MaxComments
+		}
+		// MinVideoComments 可以是 0（表示不限制）
+		cfg.MinVideoComments = config.MinVideoComments
+		if config.MinCommentsPerVideo > 0 {
+			cfg.MinCommentsPerVideo = config.MinCommentsPerVideo
+		}
+		if config.MaxCommentsPerVideoV2 > 0 {
+			cfg.MaxCommentsPerVideoV2 = config.MaxCommentsPerVideoV2
 		}
 	}
 	return &Executor{config: cfg}

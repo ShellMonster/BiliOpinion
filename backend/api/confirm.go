@@ -19,10 +19,13 @@ type ConfirmRequest struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	} `json:"dimensions"`
-	Keywords             []string `json:"keywords"`
-	VideoDateRangeMonths int      `json:"video_date_range_months,omitempty"` // 视频时间范围（月），0表示不限制，默认24
-	MinVideoDuration     int      `json:"min_video_duration,omitempty"`      // 最小视频时长（秒），0表示不过滤
-	MaxComments          int      `json:"max_comments,omitempty"`            // 最大分析评论数，默认500
+	Keywords              []string `json:"keywords"`
+	VideoDateRangeMonths  int      `json:"video_date_range_months,omitempty"`   // 视频时间范围（月），0表示不限制，默认24
+	MinVideoDuration      int      `json:"min_video_duration,omitempty"`        // 最小视频时长（秒），0表示不过滤
+	MaxComments           int      `json:"max_comments,omitempty"`              // 最大分析评论数，默认500
+	MinVideoComments      int      `json:"min_video_comments,omitempty"`        // 最小视频评论数过滤（默认0，表示不限制）
+	MinCommentsPerVideo   int      `json:"min_comments_per_video,omitempty"`    // 每视频最少抓取数（默认10）
+	MaxCommentsPerVideoV2 int      `json:"max_comments_per_video_v2,omitempty"` // 每视频最多抓取数（默认200）
 }
 
 func HandleConfirm(c *gin.Context) {
@@ -64,9 +67,12 @@ func HandleConfirm(c *gin.Context) {
 		defer sse.CloseTaskChannel(taskID)
 
 		config := &task.TaskConfig{
-			VideoDateRangeMonths: req.VideoDateRangeMonths,
-			MinVideoDuration:     req.MinVideoDuration,
-			MaxComments:          req.MaxComments,
+			VideoDateRangeMonths:  req.VideoDateRangeMonths,
+			MinVideoDuration:      req.MinVideoDuration,
+			MaxComments:           req.MaxComments,
+			MinVideoComments:      req.MinVideoComments,
+			MinCommentsPerVideo:   req.MinCommentsPerVideo,
+			MaxCommentsPerVideoV2: req.MaxCommentsPerVideoV2,
 		}
 
 		executor := task.NewExecutor(config)

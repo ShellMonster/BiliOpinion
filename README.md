@@ -1,5 +1,12 @@
 # B站商品评论解析工具
 
+[![GitHub stars](https://img.shields.io/github/stars/ShellMonster/BiliOpinion?style=flat-square)](https://github.com/ShellMonster/BiliOpinion/stargazers)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://github.com/ShellMonster/BiliOpinion/blob/main/LICENSE)
+![Go](https://img.shields.io/badge/Go-1.24-00ADD8.svg?style=flat-square)
+![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D.svg?style=flat-square)
+![React](https://img.shields.io/badge/React-19-61DAFB.svg?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square)
+
 > 基于B站视频评论的AI驱动的商品评价分析系统
 
 ---

@@ -508,28 +508,46 @@ func generateBrandAnalysis(brands []string, dimensions []ai.Dimension, scores ma
 }
 
 // selectTypicalComments 筛选典型好评和差评
-// 好评：平均得分>=8.0，取前3条；差评：平均得分<5.0，取前3条
+// 好评：平均得分>=7.0，取前3条；差评：平均得分<6.0，取前3条
+// 如果没有好评或差评，用中性评论(5-7分)补充
 func selectTypicalComments(analysisResults map[string][]CommentWithScore) (map[string][]TypicalComment, map[string][]TypicalComment) {
 	topComments := make(map[string][]TypicalComment)
 	badComments := make(map[string][]TypicalComment)
 
 	for brand, results := range analysisResults {
-		var goodList, badList []TypicalComment
+		var goodList, badList, neutralList []TypicalComment
 
 		for _, r := range results {
 			if r.Content == "" {
 				continue
 			}
 			avgScore := calculateAverageScore(r.Scores)
-			if avgScore >= 8.0 {
+			if avgScore >= 7.0 {
 				goodList = append(goodList, TypicalComment{Content: r.Content, Score: avgScore})
-			} else if avgScore < 5.0 && avgScore > 0 {
+			} else if avgScore < 6.0 && avgScore > 0 {
 				badList = append(badList, TypicalComment{Content: r.Content, Score: avgScore})
+			} else if avgScore >= 5.0 && avgScore < 7.0 {
+				// 中性评论作为fallback
+				neutralList = append(neutralList, TypicalComment{Content: r.Content, Score: avgScore})
 			}
 		}
 
 		sort.Slice(goodList, func(i, j int) bool { return goodList[i].Score > goodList[j].Score })
 		sort.Slice(badList, func(i, j int) bool { return badList[i].Score < badList[j].Score })
+		sort.Slice(neutralList, func(i, j int) bool { return neutralList[i].Score > neutralList[j].Score })
+
+		// 如果没有好评，用中性评论补充
+		if len(goodList) == 0 && len(neutralList) > 0 {
+			goodList = append(goodList, neutralList...)
+		}
+
+		// 如果没有差评，用低分中性评论补充
+		if len(badList) == 0 && len(neutralList) > 0 {
+			// 取中性评论中分数较低的
+			for i := len(neutralList) - 1; i >= 0 && len(badList) < 3; i-- {
+				badList = append(badList, neutralList[i])
+			}
+		}
 
 		if len(goodList) > 3 {
 			goodList = goodList[:3]
@@ -616,6 +634,7 @@ func extractKeywords(analysisResults map[string][]CommentWithScore) []KeywordIte
 		"在": {}, "和": {}, "与": {}, "及": {}, "而": {}, "且": {}, "或": {}, "或者": {},
 		"因为": {}, "所以": {}, "如果": {}, "但是": {}, "而且": {}, "以及": {},
 		"啊": {}, "呢": {}, "吗": {}, "吧": {}, "哦": {}, "呀": {}, "哈": {},
+		"回复": {}, // B站评论回复标记
 	}
 
 	counts := make(map[string]int)

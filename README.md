@@ -31,6 +31,12 @@ B站评论区恰好是一个被忽视的宝藏：
 - **实时进度** - SSE推送任务状态，实时查看抓取和分析进度
 - **多格式导出** - 支持导出为图片、Excel、PDF格式
 - **历史记录** - 保存分析历史，随时查看过往报告
+- **视频来源展示** - 显示分析的视频列表、UP主、播放量等数据来源信息，按播放量降序排列
+- **智能评论分配** - 按视频播放量比例分配评论抓取数量，避免热门视频数据倾斜
+- **品牌详情弹窗** - 点击品牌卡片查看详细信息，包括各维度得分、优劣势、典型评论
+- **数据过滤** - 支持隐藏未知品牌、通用型号、零分数据，聚焦主要内容
+- **并发控制** - 可配置抓取并发数(1-10)和AI并发数(1-20)，优化性能
+- **任务标题显示** - 进度页面显示任务标题（商品类型），体验更友好
 
 ---
 
@@ -254,6 +260,12 @@ B站商品评论解析/
 │   │   │   ├── Report/           # 报告相关组件
 │   │   │   │   ├── Overview/     # 总览组件
 │   │   │   │   ├── Charts/       # 图表组件
+│   │   │   │   ├── VideoSourceList.tsx    # 视频来源展示组件
+│   │   │   │   ├── DimensionFilter.tsx    # 维度筛选器
+│   │   │   │   ├── BrandDetailModal.tsx   # 品牌详情弹窗
+│   │   │   │   ├── ModelAnalysis.tsx      # 型号分析组件
+│   │   │   │   ├── CompetitorCompare.tsx  # 竞品对比
+│   │   │   │   └── DecisionTree.tsx       # 决策树
 │   │   │   │   └── ...
 │   │   │   ├── AnalysisForm.tsx  # 分析表单
 │   │   │   ├── ConfirmDialog.tsx # 确认对话框
@@ -316,6 +328,8 @@ npm run dev
 
 ## 配置说明
 
+> 💡 提示：所有配置均可通过前端"设置"页面进行修改，无需重启服务。
+
 ### 1. AI 服务配置
 
 首次使用需要配置 AI 服务（支持 OpenAI 或兼容接口）：
@@ -341,7 +355,16 @@ npm run dev
 - **Gemini 3** / Gemini 3 Flash / Gemini 3 Pro（2025年11月）
 - **Claude Opus 4.5**（2024年11月）
 
-### 2. B站 Cookie 配置
+### 2. 并发配置
+
+| 配置项 | 说明 | 默认值 | 范围 |
+|--------|------|--------|------|
+| 抓取并发数 | B站API并发请求数 | 5 | 1-10 |
+| AI并发数 | AI分析并发请求数 | 10 | 1-20 |
+
+> ⚠️ 注意：并发数过高可能触发B站反爬机制或API频率限制，建议保持默认值
+
+### 3. B站 Cookie 配置
 
 从浏览器复制 B站 Cookie：
 
@@ -350,17 +373,21 @@ npm run dev
 3. 切换到 "Network" 标签，刷新页面
 4. 找到任意请求，复制请求头中的完整 Cookie 字符串
 
-### 3. 任务配置（可选）
+### 4. 任务配置（可选）
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | 每个关键词最大视频数 | 搜索视频数量限制 | 20 |
 | 每个视频最大评论数 | 抓取评论数量限制 | 200 |
-| 最大并发数 | 并发请求数 | 5 |
+| 最小视频评论数 | 过滤评论数少的视频 | 0 |
+| 每视频最少抓取 | 确保每个视频至少抓取 | 20 |
+| 每视频最多抓取 | 防止单视频评论过多 | 200 |
 | AI 批次大小 | AI 分析批次大小 | 10 |
 | 视频时间范围（月） | 过滤旧视频，0 表示不限制 | 0 |
 | 最小视频时长（秒） | 过滤短视频 | 30 |
 | 最大分析评论数 | 分析评论总数限制 | 500 |
+
+**智能分配算法**：系统会根据视频的评论数按比例分配抓取数量，避免热门视频评论过多导致数据倾斜，同时确保每个视频至少抓取指定数量的评论。
 
 ---
 
@@ -458,8 +485,49 @@ data: {"status":"completed","message":"分析完成！共分析50个视频，500
 | /api/history/:id | DELETE | 删除历史记录 |
 | /api/report/:id | GET | 获取报告详情 |
 | /api/report/:id/pdf | GET | 导出 PDF 报告 |
-| /api/config | GET | 获取配置 |
+| /api/config | GET | 获取配置（含AI、B站Cookie、并发配置） |
 | /api/config | POST | 保存配置 |
+
+### 配置管理接口
+
+#### 获取配置
+```http
+GET /api/config
+```
+
+**响应示例：**
+```json
+{
+  "ai_base_url": "https://api.openai.com/v1",
+  "ai_api_key": "sk-...",
+  "ai_model": "gemini-3-flash-preview",
+  "bilibili_cookie": "SESSDATA=xxx;...",
+  "scrape_max_concurrency": "5",
+  "ai_max_concurrency": "10"
+}
+```
+
+#### 保存配置
+```http
+POST /api/config
+Content-Type: application/json
+
+{
+  "ai_base_url": "https://api.openai.com/v1",
+  "ai_api_key": "sk-...",
+  "ai_model": "gemini-3-flash-preview",
+  "bilibili_cookie": "SESSDATA=xxx;...",
+  "scrape_max_concurrency": "5",
+  "ai_max_concurrency": "10"
+}
+```
+
+**响应示例：**
+```json
+{
+  "message": "配置已保存"
+}
+```
 
 ---
 

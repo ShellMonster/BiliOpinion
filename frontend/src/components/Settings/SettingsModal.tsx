@@ -24,22 +24,37 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     aiModel: 'gemini-3-flash-preview',
     bilibiliCookie: ''
   })
+  const [scrapeMaxConcurrency, setScrapeMaxConcurrency] = useState(5)
+  const [aiMaxConcurrency, setAiMaxConcurrency] = useState(10)
 
-  // Load settings from localStorage when modal opens
+  // Load settings from backend API when modal opens
   useEffect(() => {
     if (isOpen) {
-      const saved = localStorage.getItem('settings')
-      if (saved) {
-        setSettings(JSON.parse(saved))
-      }
+      fetch('http://localhost:8080/api/config')
+        .then(res => res.json())
+        .then(data => {
+          setSettings({
+            aiApiBase: data.ai_base_url || 'https://api.openai.com/v1',
+            aiApiKey: data.ai_api_key || '',
+            aiModel: data.ai_model || 'gemini-3-flash-preview',
+            bilibiliCookie: data.bilibili_cookie || ''
+          })
+          setScrapeMaxConcurrency(parseInt(data.scrape_max_concurrency) || 5)
+          setAiMaxConcurrency(parseInt(data.ai_max_concurrency) || 10)
+        })
+        .catch(err => {
+          console.error('加载配置失败:', err)
+          const saved = localStorage.getItem('settings')
+          if (saved) {
+            setSettings(JSON.parse(saved))
+          }
+        })
     }
   }, [isOpen])
 
   const handleSave = async () => {
-    // Save to localStorage
     localStorage.setItem('settings', JSON.stringify(settings))
     
-    // Also save to backend API
     try {
       await fetch('http://localhost:8080/api/config', {
         method: 'POST',
@@ -48,7 +63,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           ai_base_url: settings.aiApiBase,
           ai_api_key: settings.aiApiKey,
           ai_model: settings.aiModel,
-          bilibili_cookie: settings.bilibiliCookie
+          bilibili_cookie: settings.bilibiliCookie,
+          scrape_max_concurrency: String(scrapeMaxConcurrency),
+          ai_max_concurrency: String(aiMaxConcurrency)
         })
       })
     } catch (error) {
@@ -105,6 +122,49 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           />
           <p className="text-xs text-slate-500 mt-2">
             从浏览器开发者工具中复制完整的Cookie字符串
+          </p>
+        </div>
+      </div>
+
+      {/* 并发配置 */}
+      <div className="space-y-4 mb-8">
+        <h3 className="text-lg font-bold text-slate-700">并发配置</h3>
+        
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">
+            抓取并发数
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={scrapeMaxConcurrency}
+            onChange={(e) => setScrapeMaxConcurrency(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+            className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-900 
+                       placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 
+                       transition-all duration-200 outline-none"
+          />
+          <p className="text-xs text-amber-600 mt-2">
+            ⚠️ 并发数过高可能触发B站反爬机制，建议保持默认值5
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">
+            AI并发数
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={aiMaxConcurrency}
+            onChange={(e) => setAiMaxConcurrency(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+            className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-900 
+                       placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 
+                       transition-all duration-200 outline-none"
+          />
+          <p className="text-xs text-amber-600 mt-2">
+            ⚠️ 并发数过高可能触发API频率限制，建议根据API配额调整
           </p>
         </div>
       </div>

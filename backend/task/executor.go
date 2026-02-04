@@ -166,7 +166,17 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	log.Printf("[Task %s] Found %d videos", taskID, len(allVideos))
 
-	// 阶段3：抓取评论
+	// 阶段3：计算按比例分配
+	commentAllocation := e.calculateProportionalAllocation(
+		allVideos,
+		e.config.MaxComments,
+		e.config.MinCommentsPerVideo,
+		e.config.MaxCommentsPerVideoV2,
+	)
+
+	log.Printf("[Task %s] Comment allocation calculated for %d videos", taskID, len(commentAllocation))
+
+	// 阶段4：抓取评论
 	sse.PushProgress(taskID, sse.StatusScraping, 20, 100, fmt.Sprintf("开始抓取%d个视频的评论...", len(allVideos)))
 	e.updateTaskProgress(history.ID, sse.StatusScraping, 20, fmt.Sprintf("开始抓取%d个视频的评论...", len(allVideos)))
 
@@ -178,13 +188,12 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 		RequestDelay:        200 * time.Millisecond,
 	})
 
-	// 设置进度回调
 	scraper.SetProgressCallback(func(stage string, current, total int, message string) {
-		progress := 20 + (current * 30 / max(total, 1)) // 20-50%
+		progress := 20 + (current * 30 / max(total, 1))
 		sse.PushProgress(taskID, sse.StatusScraping, progress, 100, message)
 	})
 
-	scrapeResult, err := scraper.ScrapeByVideos(ctx, allVideos)
+	scrapeResult, err := scraper.ScrapeByVideos(ctx, allVideos, commentAllocation)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, fmt.Sprintf("抓取评论失败: %v", err))
@@ -417,7 +426,77 @@ func (e *Executor) searchVideos(ctx context.Context, taskID string, client *bili
 		allVideos = filteredVideos
 	}
 
+	// 评论数过滤：过滤掉评论数低于最小值的视频
+	if e.config.MinVideoComments > 0 {
+		var filteredVideos []bilibili.VideoInfo
+		filteredCount := 0
+		for _, v := range allVideos {
+			if v.VideoReview >= e.config.MinVideoComments {
+				filteredVideos = append(filteredVideos, v)
+			} else {
+				filteredCount++
+			}
+		}
+		if filteredCount > 0 {
+			log.Printf("[Task %s] 过滤了 %d 个评论数低于 %d 的视频", taskID, filteredCount, e.config.MinVideoComments)
+		}
+		allVideos = filteredVideos
+	}
+
 	return allVideos, nil
+}
+
+// calculateProportionalAllocation 计算按比例分配评论数
+// 根据视频评论数按比例分配抓取数量，确保总数不超过 maxComments
+func (e *Executor) calculateProportionalAllocation(
+	videos []bilibili.VideoInfo,
+	maxComments int,
+	minPerVideo int,
+	maxPerVideo int,
+) map[string]int {
+	result := make(map[string]int)
+
+	if len(videos) == 0 {
+		return result
+	}
+
+	totalComments := 0
+	for _, v := range videos {
+		totalComments += v.VideoReview
+	}
+
+	if totalComments == 0 {
+		perVideo := maxComments / len(videos)
+		if perVideo < minPerVideo {
+			perVideo = minPerVideo
+		}
+		if perVideo > maxPerVideo {
+			perVideo = maxPerVideo
+		}
+		for _, v := range videos {
+			result[v.BVID] = perVideo
+		}
+		return result
+	}
+
+	for _, v := range videos {
+		ratio := float64(v.VideoReview) / float64(totalComments)
+		allocated := int(ratio * float64(maxComments))
+
+		if allocated < minPerVideo {
+			allocated = minPerVideo
+		}
+		if allocated > maxPerVideo {
+			allocated = maxPerVideo
+		}
+		if v.VideoReview > 0 && allocated > v.VideoReview {
+			allocated = v.VideoReview
+		}
+
+		result[v.BVID] = allocated
+	}
+
+	return result
 }
 
 // analyzeComments 分析评论

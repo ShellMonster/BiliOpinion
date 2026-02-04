@@ -25,6 +25,9 @@ const Confirm = () => {
   const [videoDateRangeMonths, setVideoDateRangeMonths] = useState(0)
   const [minVideoDuration, setMinVideoDuration] = useState(30)
   const [maxComments, setMaxComments] = useState(500)
+  const [minVideoComments, setMinVideoComments] = useState(0)
+  const [minCommentsPerVideo, setMinCommentsPerVideo] = useState(20)
+  const [maxCommentsPerVideo, setMaxCommentsPerVideo] = useState(200)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -68,7 +71,10 @@ const Confirm = () => {
           keywords: data.keywords,
           video_date_range_months: videoDateRangeMonths,
           min_video_duration: minVideoDuration,
-          max_comments: maxComments
+          max_comments: maxComments,
+          min_video_comments: minVideoComments,
+          min_comments_per_video: minCommentsPerVideo,
+          max_comments_per_video_v2: maxCommentsPerVideo
         })
       })
       const result = await response.json()
@@ -190,6 +196,57 @@ const Confirm = () => {
                     <option value={2000}>限制 2000 条</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">分析评论数量</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-purple-50/50 rounded-xl p-4 border border-purple-100">
+              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                <span>🎯</span> 评论抓取策略
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 最小视频评论数 */}
+                <div>
+                  <select
+                    value={minVideoComments}
+                    onChange={(e) => setMinVideoComments(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={0}>不限制 (推荐)</option>
+                    <option value={50}>至少 50 条</option>
+                    <option value={100}>至少 100 条</option>
+                    <option value={200}>至少 200 条</option>
+                    <option value={500}>至少 500 条</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">最小视频评论数</p>
+                </div>
+                {/* 每视频最少抓取 */}
+                <div>
+                  <select
+                    value={minCommentsPerVideo}
+                    onChange={(e) => setMinCommentsPerVideo(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={10}>至少 10 条</option>
+                    <option value={20}>至少 20 条 (推荐)</option>
+                    <option value={50}>至少 50 条</option>
+                    <option value={100}>至少 100 条</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">每视频最少抓取</p>
+                </div>
+                {/* 每视频最多抓取 */}
+                <div>
+                  <select
+                    value={maxCommentsPerVideo}
+                    onChange={(e) => setMaxCommentsPerVideo(Number(e.target.value))}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
+                  >
+                    <option value={100}>最多 100 条</option>
+                    <option value={200}>最多 200 条 (推荐)</option>
+                    <option value={500}>最多 500 条</option>
+                    <option value={1000}>最多 1000 条</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">每视频最多抓取</p>
                 </div>
               </div>
             </div>

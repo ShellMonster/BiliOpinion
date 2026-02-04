@@ -180,8 +180,7 @@ func (s *Scraper) ScrapeByKeyword(ctx context.Context, keyword string) (*ScrapeR
 			defer wg.Done()
 			defer sem.Release(1)
 
-			// 抓取评论
-			comments, err := s.scrapeVideoComments(ctx, v.BVID)
+			comments, err := s.scrapeVideoCommentsWithLimit(ctx, v.BVID, s.config.MaxCommentsPerVideo)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -225,13 +224,13 @@ func (s *Scraper) ScrapeByKeyword(ctx context.Context, keyword string) (*ScrapeR
 	return result, nil
 }
 
-// scrapeVideoComments 抓取单个视频的评论
-func (s *Scraper) scrapeVideoComments(ctx context.Context, bvid string) ([]Comment, error) {
+// scrapeVideoCommentsWithLimit 抓取单个视频的评论（带数量限制）
+func (s *Scraper) scrapeVideoCommentsWithLimit(ctx context.Context, bvid string, maxComments int) ([]Comment, error) {
 	var allComments []Comment
 	page := 1
 	pageSize := 20
 
-	for len(allComments) < s.config.MaxCommentsPerVideo {
+	for len(allComments) < maxComments {
 		// 检查上下文是否取消
 		select {
 		case <-ctx.Done():
@@ -268,9 +267,8 @@ func (s *Scraper) scrapeVideoComments(ctx context.Context, bvid string) ([]Comme
 		time.Sleep(s.config.RequestDelay)
 	}
 
-	// 截取到指定数量
-	if len(allComments) > s.config.MaxCommentsPerVideo {
-		allComments = allComments[:s.config.MaxCommentsPerVideo]
+	if len(allComments) > maxComments {
+		allComments = allComments[:maxComments]
 	}
 
 	return allComments, nil
@@ -282,11 +280,12 @@ func (s *Scraper) scrapeVideoComments(ctx context.Context, bvid string) ([]Comme
 // 参数：
 //   - ctx: 上下文（用于取消）
 //   - videos: 视频列表
+//   - commentAllocation: 每个视频的评论数分配（可选，key: BVID, value: 评论数）
 //
 // 返回：
 //   - *ScrapeResult: 抓取结果
 //   - error: 错误信息
-func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*ScrapeResult, error) {
+func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo, commentAllocation map[string]int) (*ScrapeResult, error) {
 	startTime := time.Now()
 	result := &ScrapeResult{
 		Videos:   videos,
@@ -337,13 +336,11 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 			defer wg.Done()
 			defer sem.Release(1)
 
-			// 开始抓取时推送进度，让用户知道当前正在处理哪个视频
 			mu.Lock()
 			startedCount++
 			currentStarted := startedCount
 			mu.Unlock()
 
-			// 截断视频标题（最多20个字符），避免进度消息过长
 			title := v.Title
 			if len([]rune(title)) > 20 {
 				title = string([]rune(title)[:20]) + "..."
@@ -353,7 +350,14 @@ func (s *Scraper) ScrapeByVideos(ctx context.Context, videos []VideoInfo) (*Scra
 			s.reportProgress("scraping", currentStarted, len(videos),
 				fmt.Sprintf("正在抓取 (%d/%d): %s", currentStarted, len(videos), title))
 
-			comments, err := s.scrapeVideoComments(ctx, v.BVID)
+			maxComments := s.config.MaxCommentsPerVideo
+			if commentAllocation != nil {
+				if allocated, ok := commentAllocation[v.BVID]; ok {
+					maxComments = allocated
+				}
+			}
+
+			comments, err := s.scrapeVideoCommentsWithLimit(ctx, v.BVID, maxComments)
 
 			mu.Lock()
 			defer mu.Unlock()

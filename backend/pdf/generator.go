@@ -527,13 +527,162 @@ func drawRecommendation(pdf *fpdf.Fpdf, family string, reportData *report.Report
 		}
 	}
 
-	setFont(pdf, family, "", 11)
 	pdf.SetTextColor(17, 24, 39)
 	pdf.SetFillColor(249, 250, 251)
 	pdf.SetDrawColor(229, 231, 235)
 
 	ensureSpace(pdf, 20)
-	pdf.MultiCell(0, 6.5, text, "1", "L", true)
+
+	// 获取页面边距和宽度
+	left, _, right, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	usableW := pageW - left - right
+
+	// 绘制背景框
+	y := pdf.GetY()
+	lines := strings.Split(text, "\n")
+	estimatedH := float64(len(lines)) * 6.5
+	if estimatedH < 20 {
+		estimatedH = 20
+	}
+	pdf.Rect(left, y, usableW, estimatedH, "FD")
+
+	// 逐行解析并渲染 Markdown
+	pdf.SetXY(left+2, y+2) // 添加内边距
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			pdf.Ln(3) // 空行间距
+			continue
+		}
+
+		// 检查是否为列表项
+		if strings.HasPrefix(line, "- ") {
+			// 移除 "- " 前缀
+			line = strings.TrimPrefix(line, "- ")
+			// 绘制列表项
+			drawStyledText(pdf, family, "• "+line, usableW-4, 6.5, 4) // 添加缩进
+		} else {
+			// 普通段落
+			drawStyledText(pdf, family, line, usableW-4, 6.5, 2)
+		}
+		pdf.Ln(1) // 行间距
+	}
+}
+
+// drawStyledText 解析并渲染带有 Markdown 样式的文本
+// 支持 **bold**、*italic* 和混合样式
+func drawStyledText(pdf *fpdf.Fpdf, family, text string, maxW, lineH, indent float64) {
+	x := pdf.GetX() + indent
+	y := pdf.GetY()
+	pdf.SetXY(x, y)
+
+	// 解析文本为样式段
+	segments := parseMarkdown(text)
+
+	currentX := x
+	for _, seg := range segments {
+		// 设置字体样式
+		setFont(pdf, family, seg.style, 11)
+
+		// 计算文本宽度
+		textW := pdf.GetStringWidth(seg.text)
+
+		// 检查是否需要换行
+		if currentX+textW > x+maxW && currentX > x {
+			pdf.Ln(lineH)
+			currentX = x
+			pdf.SetX(currentX)
+		}
+
+		// 绘制文本段
+		pdf.CellFormat(textW, lineH, seg.text, "", 0, "L", false, 0, "")
+		currentX += textW
+	}
+}
+
+// textSegment 表示一个带样式的文本段
+type textSegment struct {
+	text  string // 文本内容
+	style string // 样式: "" = normal, "B" = bold, "I" = italic, "BI" = bold+italic
+}
+
+// parseMarkdown 解析 Markdown 文本为样式段列表
+// 支持 **bold**、*italic* 和嵌套样式
+func parseMarkdown(text string) []textSegment {
+	var segments []textSegment
+	var current strings.Builder
+	currentStyle := ""
+
+	i := 0
+	for i < len(text) {
+		// 检查 **bold**
+		if i+1 < len(text) && text[i:i+2] == "**" {
+			// 保存当前段
+			if current.Len() > 0 {
+				segments = append(segments, textSegment{text: current.String(), style: currentStyle})
+				current.Reset()
+			}
+
+			// 查找结束标记
+			end := strings.Index(text[i+2:], "**")
+			if end != -1 {
+				end += i + 2
+				boldText := text[i+2 : end]
+
+				// 检查是否包含 *italic*
+				if strings.Contains(boldText, "*") {
+					// 递归解析嵌套样式
+					nestedSegs := parseMarkdown(boldText)
+					for _, seg := range nestedSegs {
+						if seg.style == "" {
+							seg.style = "B"
+						} else if seg.style == "I" {
+							seg.style = "BI"
+						}
+						segments = append(segments, seg)
+					}
+				} else {
+					segments = append(segments, textSegment{text: boldText, style: "B"})
+				}
+
+				i = end + 2
+				continue
+			}
+		}
+
+		// 检查 *italic*
+		if text[i] == '*' && (i == 0 || text[i-1] != '*') {
+			// 保存当前段
+			if current.Len() > 0 {
+				segments = append(segments, textSegment{text: current.String(), style: currentStyle})
+				current.Reset()
+			}
+
+			// 查找结束标记
+			end := i + 1
+			for end < len(text) && text[end] != '*' {
+				end++
+			}
+			if end < len(text) {
+				italicText := text[i+1 : end]
+				segments = append(segments, textSegment{text: italicText, style: "I"})
+				i = end + 1
+				continue
+			}
+		}
+
+		// 普通字符
+		current.WriteByte(text[i])
+		i++
+	}
+
+	// 保存最后一段
+	if current.Len() > 0 {
+		segments = append(segments, textSegment{text: current.String(), style: currentStyle})
+	}
+
+	return segments
 }
 
 func lookupScore(reportData *report.ReportData, brand, dimName string) (float64, bool) {

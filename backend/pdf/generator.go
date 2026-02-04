@@ -26,6 +26,7 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 
 	now := time.Now()
 
+	// 标题
 	pdf.SetTextColor(17, 24, 39)
 	setFont(pdf, fontFamily, "B", 20)
 	if useEnglish {
@@ -35,6 +36,7 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	}
 	pdf.Ln(2)
 
+	// 元信息
 	setFont(pdf, fontFamily, "", 11)
 	var meta string
 	if useEnglish {
@@ -46,6 +48,16 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	pdf.CellFormat(0, 6, meta, "", 1, "L", false, 0, "")
 	pdf.Ln(4)
 
+	// ===== 新增：关键统计卡片 =====
+	if useEnglish {
+		sectionHeader(pdf, fontFamily, "Key Statistics")
+	} else {
+		sectionHeader(pdf, fontFamily, "关键统计")
+	}
+	drawKeyStatsCards(pdf, fontFamily, reportData, useEnglish)
+	pdf.Ln(4)
+
+	// Top 品牌概览
 	if useEnglish {
 		sectionHeader(pdf, fontFamily, "Top Brand Overview")
 	} else {
@@ -54,6 +66,7 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	drawTopBrandCard(pdf, fontFamily, reportData, useEnglish)
 	pdf.Ln(4)
 
+	// 品牌排名
 	if useEnglish {
 		sectionHeader(pdf, fontFamily, "Brand Rankings")
 	} else {
@@ -62,6 +75,7 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	drawRankingTable(pdf, fontFamily, reportData, useEnglish)
 	pdf.Ln(4)
 
+	// 型号排名
 	if len(reportData.ModelRankings) > 0 {
 		if useEnglish {
 			sectionHeader(pdf, fontFamily, "Model Rankings")
@@ -81,6 +95,7 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	drawBarChart(pdf, fontFamily, reportData, useEnglish)
 	pdf.Ln(4)
 
+	// 维度得分矩阵
 	if useEnglish {
 		sectionHeader(pdf, fontFamily, "Dimension Scores")
 	} else {
@@ -89,6 +104,34 @@ func GeneratePDF(reportData *report.ReportData, reportID uint) ([]byte, error) {
 	drawDimensionMatrix(pdf, fontFamily, reportData, useEnglish)
 	pdf.Ln(4)
 
+	// ===== 新增：情感分布统计 =====
+	if useEnglish {
+		sectionHeader(pdf, fontFamily, "Sentiment Distribution")
+	} else {
+		sectionHeader(pdf, fontFamily, "情感分布")
+	}
+	drawSentimentDistribution(pdf, fontFamily, reportData, useEnglish)
+	pdf.Ln(4)
+
+	// ===== 新增：品牌详情附录 =====
+	if useEnglish {
+		sectionHeader(pdf, fontFamily, "Brand Details")
+	} else {
+		sectionHeader(pdf, fontFamily, "品牌详情")
+	}
+	drawBrandDetails(pdf, fontFamily, reportData, useEnglish)
+	pdf.Ln(4)
+
+	// ===== 新增：数据来源列表 =====
+	if useEnglish {
+		sectionHeader(pdf, fontFamily, "Data Sources")
+	} else {
+		sectionHeader(pdf, fontFamily, "数据来源")
+	}
+	drawVideoSources(pdf, fontFamily, reportData, useEnglish)
+	pdf.Ln(4)
+
+	// 购买建议
 	if useEnglish {
 		sectionHeader(pdf, fontFamily, "Purchase Recommendation")
 	} else {
@@ -1099,4 +1142,415 @@ func drawBarChart(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, 
 
 	// 恢复默认文本颜色
 	pdf.SetTextColor(17, 24, 39)
+}
+
+// drawKeyStatsCards 绘制关键统计卡片
+// 显示分析视频数、评论总数、品牌数
+func drawKeyStatsCards(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, useEnglish bool) {
+	left, _, right, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	usableW := pageW - left - right
+
+	// 计算每个卡片的宽度（3个卡片，间距4mm）
+	spacing := 4.0
+	cardW := (usableW - spacing*2) / 3
+	cardH := 20.0
+
+	// 统计数据
+	totalVideos := reportData.Stats.TotalVideos
+	totalComments := reportData.Stats.TotalComments
+	brandCount := len(reportData.Brands)
+
+	// 定义卡片数据
+	cards := []struct {
+		label    string
+		value    string
+		colorR   int
+		colorG   int
+		colorB   int
+		textR    int
+		textG    int
+		textB    int
+	}{
+		{
+			label:    useEnglishOrFallback(useEnglish, "分析视频数", "Videos"),
+			value:    fmt.Sprintf("%d", totalVideos),
+			colorR:   59, colorG: 130, colorB: 246,
+			textR:    255, textG: 255, textB: 255,
+		},
+		{
+			label:    useEnglishOrFallback(useEnglish, "评论总数", "Comments"),
+			value:    fmt.Sprintf("%d", totalComments),
+			colorR:   16, colorG: 185, colorB: 129,
+			textR:    255, textG: 255, textB: 255,
+		},
+		{
+			label:    useEnglishOrFallback(useEnglish, "对比品牌数", "Brands"),
+			value:    fmt.Sprintf("%d", brandCount),
+			colorR:   245, colorG: 158, colorB: 11,
+			textR:    255, textG: 255, textB: 255,
+		},
+	}
+
+	for i, card := range cards {
+		x := left + float64(i)*(cardW+spacing)
+		y := pdf.GetY()
+
+		// 绘制卡片背景
+		pdf.SetFillColor(card.colorR, card.colorG, card.colorB)
+		pdf.RoundedRect(x, y, cardW, cardH, 3, "1234", "F")
+
+		// 绘制数值
+		pdf.SetXY(x, y+5)
+		setFont(pdf, family, "B", 16)
+		pdf.SetTextColor(card.textR, card.textG, card.textB)
+		pdf.CellFormat(cardW, 8, card.value, "", 1, "C", false, 0, "")
+
+		// 绘制标签
+		pdf.SetX(x)
+		setFont(pdf, family, "", 10)
+		pdf.CellFormat(cardW, 6, card.label, "", 0, "C", false, 0, "")
+	}
+
+	// 设置Y坐标到卡片底部
+	pdf.SetY(pdf.GetY() + cardH)
+}
+
+// drawSentimentDistribution 绘制情感分布统计
+// 显示好评、中性、差评的数量和百分比
+func drawSentimentDistribution(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, useEnglish bool) {
+	sentiment := reportData.SentimentDistribution
+	total := sentiment.PositiveCount + sentiment.NeutralCount + sentiment.NegativeCount
+
+	if total == 0 {
+		setFont(pdf, family, "", 11)
+		pdf.SetTextColor(75, 85, 99)
+		if useEnglish {
+			pdf.MultiCell(0, 6, "No sentiment data available", "1", "L", false)
+		} else {
+			pdf.MultiCell(0, 6, "暂无情感分布数据", "1", "L", false)
+		}
+		return
+	}
+
+	left, _, right, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	usableW := pageW - left - right
+
+	// 绘制三个分布条
+	barH := 10.0
+	maxW := usableW * 0.7  // 进度条最大宽度
+	labelW := 25.0         // 标签宽度
+
+	items := []struct {
+		label   string
+		count   int
+		pct     float64
+		fillR   int
+		fillG   int
+		fillB   int
+		textR   int
+		textG   int
+		textB   int
+	}{
+		{
+			label:   useEnglishOrFallback(useEnglish, "好评", "Positive"),
+			count:   sentiment.PositiveCount,
+			pct:     sentiment.PositivePct,
+			fillR:   34, fillG: 197, fillB: 94,
+			textR:   22, textG: 163, textB: 74,
+		},
+		{
+			label:   useEnglishOrFallback(useEnglish, "中性", "Neutral"),
+			count:   sentiment.NeutralCount,
+			pct:     sentiment.NeutralPct,
+			fillR:   251, fillG: 191, fillB: 36,
+			textR:   245, textG: 158, textB: 11,
+		},
+		{
+			label:   useEnglishOrFallback(useEnglish, "差评", "Negative"),
+			count:   sentiment.NegativeCount,
+			pct:     sentiment.NegativePct,
+			fillR:   239, fillG: 68, fillB: 68,
+			textR:   220, textG: 38, textB: 38,
+		},
+	}
+
+	for _, item := range items {
+		ensureSpace(pdf, barH+4)
+		y := pdf.GetY()
+
+		// 绘制标签
+		pdf.SetTextColor(17, 24, 39)
+		setFont(pdf, family, "", 10)
+		pdf.SetXY(left, y)
+		pdf.CellFormat(labelW, barH, item.label, "", 0, "L", false, 0, "")
+
+		// 绘制进度条背景
+		barX := left + labelW + 2
+		pdf.SetFillColor(229, 231, 235)
+		pdf.Rect(barX, y, maxW, barH, "F")
+
+		// 绘制进度条
+		barW := maxW * (item.pct / 100.0)
+		pdf.SetFillColor(item.fillR, item.fillG, item.fillB)
+		pdf.Rect(barX, y, barW, barH, "F")
+
+		// 绘制数值和百分比
+		pdf.SetXY(barX+maxW+5, y)
+		pdf.SetTextColor(item.textR, item.textG, item.textB)
+		setFont(pdf, family, "B", 10)
+		pdf.CellFormat(0, barH, fmt.Sprintf("%d (%.1f%%)", item.count, item.pct), "", 1, "L", false, 0, "")
+
+		pdf.Ln(2)
+	}
+
+	pdf.SetTextColor(17, 24, 39)
+}
+
+// drawBrandDetails 绘制品牌详情附录
+// 为每个品牌展示详细信息：综合得分、各维度得分、优劣势、典型评论
+func drawBrandDetails(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, useEnglish bool) {
+	if len(reportData.Rankings) == 0 {
+		setFont(pdf, family, "", 11)
+		pdf.SetTextColor(75, 85, 99)
+		if useEnglish {
+			pdf.MultiCell(0, 6, "No brand data available", "1", "L", false)
+		} else {
+			pdf.MultiCell(0, 6, "暂无品牌数据", "1", "L", false)
+		}
+		return
+	}
+
+	// 只展示前5个品牌，避免PDF过长
+	maxBrands := 5
+	if len(reportData.Rankings) < maxBrands {
+		maxBrands = len(reportData.Rankings)
+	}
+
+	for i := 0; i < maxBrands; i++ {
+		brand := reportData.Rankings[i]
+		ensureSpace(pdf, 40)
+
+		// 品牌标题
+		pdf.SetTextColor(30, 41, 59)
+		setFont(pdf, family, "B", 13)
+		titleText := fmt.Sprintf("#%d %s", brand.Rank, safeText(brand.Brand))
+		pdf.CellFormat(0, 8, titleText, "", 1, "L", false, 0, "")
+
+		// 综合得分
+		pdf.SetTextColor(17, 24, 39)
+		setFont(pdf, family, "", 10)
+		scoreText := useEnglishOrFallback(
+			useEnglish,
+			fmt.Sprintf("Overall Score: %.1f/10", brand.OverallScore),
+			fmt.Sprintf("综合得分：%.1f/10", brand.OverallScore),
+		)
+		pdf.CellFormat(0, 6, scoreText, "", 1, "L", false, 0, "")
+
+		// 各维度得分
+		if len(brand.Scores) > 0 {
+			pdf.Ln(1)
+			setFont(pdf, family, "", 9)
+			for _, dim := range reportData.Dimensions {
+				if score, ok := brand.Scores[dim.Name]; ok {
+					// 维度名称和得分
+					dimText := fmt.Sprintf("  • %s: %.1f", safeText(dim.Name), score)
+					pdf.CellFormat(0, 5, dimText, "", 0, "L", false, 0, "")
+					
+					// 得分颜色指示
+					fillR, fillG, fillB, _, _, _ := scoreColors(score)
+					pdf.SetFillColor(fillR, fillG, fillB)
+					pdf.Rect(pdf.GetX()+2, pdf.GetY()+1, 3, 3, "F")
+					pdf.Ln(5)
+				}
+			}
+		}
+
+		// 优劣势分析
+		if analysis, ok := reportData.BrandAnalysis[brand.Brand]; ok {
+			pdf.Ln(1)
+			pdf.SetTextColor(17, 24, 39)
+			setFont(pdf, family, "", 9)
+
+			if len(analysis.Strengths) > 0 {
+				pdf.CellFormat(0, 5, useEnglishOrFallback(useEnglish, "  Strengths: ", "  优势："), "", 0, "L", false, 0, "")
+				pdf.SetTextColor(22, 163, 74)
+				pdf.CellFormat(0, 5, fmt.Sprintf("%v", analysis.Strengths), "", 1, "L", false, 0, "")
+			}
+
+			if len(analysis.Weaknesses) > 0 {
+				pdf.SetTextColor(17, 24, 39)
+				pdf.CellFormat(0, 5, useEnglishOrFallback(useEnglish, "  Weaknesses: ", "  劣势："), "", 0, "L", false, 0, "")
+				pdf.SetTextColor(239, 68, 68)
+				pdf.CellFormat(0, 5, fmt.Sprintf("%v", analysis.Weaknesses), "", 1, "L", false, 0, "")
+			}
+		}
+
+		// 典型评论
+		if goodComments, ok := reportData.TopComments[brand.Brand]; ok && len(goodComments) > 0 {
+			pdf.Ln(2)
+			pdf.SetTextColor(17, 24, 39)
+			setFont(pdf, family, "", 9)
+			pdf.CellFormat(0, 5, useEnglishOrFallback(useEnglish, "  Typical Positive Comments:", "  典型好评："), "", 1, "L", false, 0, "")
+			
+			pdf.SetTextColor(71, 85, 105)
+			for j, comment := range goodComments {
+				if j >= 2 { // 最多显示2条
+					break
+				}
+				// 截断过长的评论
+				commentText := comment.Content
+				if len(commentText) > 80 {
+					commentText = commentText[:80] + "..."
+				}
+				pdf.MultiCell(0, 5, "    • "+safeText(commentText), "", "L", false)
+			}
+		}
+
+		if badComments, ok := reportData.BadComments[brand.Brand]; ok && len(badComments) > 0 {
+			pdf.Ln(1)
+			pdf.SetTextColor(17, 24, 39)
+			setFont(pdf, family, "", 9)
+			pdf.CellFormat(0, 5, useEnglishOrFallback(useEnglish, "  Typical Negative Comments:", "  典型差评："), "", 1, "L", false, 0, "")
+			
+			pdf.SetTextColor(71, 85, 105)
+			for j, comment := range badComments {
+				if j >= 2 { // 最多显示2条
+					break
+				}
+				commentText := comment.Content
+				if len(commentText) > 80 {
+					commentText = commentText[:80] + "..."
+				}
+				pdf.MultiCell(0, 5, "    • "+safeText(commentText), "", "L", false)
+			}
+		}
+
+		// 分隔线
+		pdf.Ln(2)
+		pdf.SetDrawColor(203, 213, 225)
+		left, _, right, _ := pdf.GetMargins()
+		pageW, _ := pdf.GetPageSize()
+		pdf.Line(left, pdf.GetY(), pageW-right, pdf.GetY())
+		pdf.Ln(3)
+	}
+
+	pdf.SetTextColor(17, 24, 39)
+}
+
+// drawVideoSources 绘制数据来源列表
+// 显示视频标题、UP主、播放量、评论数
+func drawVideoSources(pdf *fpdf.Fpdf, family string, reportData *report.ReportData, useEnglish bool) {
+	if len(reportData.VideoSources) == 0 {
+		setFont(pdf, family, "", 11)
+		pdf.SetTextColor(75, 85, 99)
+		if useEnglish {
+			pdf.MultiCell(0, 6, "No video source data available", "1", "L", false)
+		} else {
+			pdf.MultiCell(0, 6, "暂无视频来源数据", "1", "L", false)
+		}
+		return
+	}
+
+	left, _, right, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	usableW := pageW - left - right
+
+	// 列宽分配
+	colRank := 12.0
+	colTitle := usableW * 0.45
+	colAuthor := usableW * 0.20
+	colPlay := usableW * 0.12
+	colComments := usableW - colRank - colTitle - colAuthor - colPlay
+	rowH := 7.0
+
+	// 表头
+	setFont(pdf, family, "B", 9)
+	pdf.SetFillColor(241, 245, 249)
+	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetTextColor(15, 23, 42)
+
+	if useEnglish {
+		pdf.CellFormat(colRank, rowH, "#", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colTitle, rowH, "Video Title", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colAuthor, rowH, "UP Host", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colPlay, rowH, "Views", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colComments, rowH, "Comments", "1", 1, "C", true, 0, "")
+	} else {
+		pdf.CellFormat(colRank, rowH, "#", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colTitle, rowH, "视频标题", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colAuthor, rowH, "UP主", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(colPlay, rowH, "播放量", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(colComments, rowH, "评论数", "1", 1, "C", true, 0, "")
+	}
+
+	// 数据行（最多显示20个视频）
+	setFont(pdf, family, "", 8)
+	maxVideos := 20
+	if len(reportData.VideoSources) < maxVideos {
+		maxVideos = len(reportData.VideoSources)
+	}
+
+	for i := 0; i < maxVideos; i++ {
+		video := reportData.VideoSources[i]
+		ensureSpace(pdf, rowH)
+
+		pdf.SetTextColor(17, 24, 39)
+		pdf.SetFillColor(255, 255, 255)
+
+		// 排名
+		pdf.CellFormat(colRank, rowH, fmt.Sprintf("%d", i+1), "1", 0, "C", false, 0, "")
+
+		// 视频标题（截断）
+		title := safeText(video.Title)
+		if len(title) > 25 {
+			title = title[:25] + "..."
+		}
+		pdf.CellFormat(colTitle, rowH, title, "1", 0, "L", false, 0, "")
+
+		// UP主
+		pdf.CellFormat(colAuthor, rowH, safeText(video.Author), "1", 0, "L", false, 0, "")
+
+		// 播放量
+		pdf.CellFormat(colPlay, rowH, formatNumber(video.Play), "1", 0, "C", false, 0, "")
+
+		// 评论数
+		pdf.CellFormat(colComments, rowH, formatNumber(video.VideoReview), "1", 1, "C", false, 0, "")
+	}
+
+	pdf.SetTextColor(17, 24, 39)
+
+	// 如果视频很多，显示省略提示
+	if len(reportData.VideoSources) > maxVideos {
+		pdf.Ln(2)
+		pdf.SetTextColor(107, 114, 128)
+		setFont(pdf, family, "", 9)
+		omitText := useEnglishOrFallback(
+			useEnglish,
+			fmt.Sprintf("... and %d more videos", len(reportData.VideoSources)-maxVideos),
+			fmt.Sprintf("... 还有 %d 个视频", len(reportData.VideoSources)-maxVideos),
+		)
+		pdf.CellFormat(0, 6, omitText, "", 1, "L", false, 0, "")
+		pdf.SetTextColor(17, 24, 39)
+	}
+}
+
+// useEnglishOrFallback 根据语言返回对应文本或回退文本
+func useEnglishOrFallback(useEnglish bool, zhText, enText string) string {
+	if useEnglish {
+		return enText
+	}
+	return zhText
+}
+
+// formatNumber 格式化数字（添加千分位）
+func formatNumber(n int) string {
+	if n >= 10000 {
+		return fmt.Sprintf("%.1fw", float64(n)/10000.0)
+	}
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+	}
+	return fmt.Sprintf("%d", n)
 }

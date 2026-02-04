@@ -29,11 +29,136 @@ const Report = () => {
   const [exporting, setExporting] = useState(false)
   const [imageExporting, setImageExporting] = useState(false)
   const [excelExporting, setExcelExporting] = useState(false)
+  const [allTabsExporting, setAllTabsExporting] = useState(false)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [selectedDims, setSelectedDims] = useState<string[]>([])
   const [hideUnknown, setHideUnknown] = useState(true)
   const [hideZeroScore, setHideZeroScore] = useState(true)
   const { showToast } = useToast()
+
+  // 导出全部标签页为图片
+  const handleExportAllTabsImage = async () => {
+    const data = report?.data
+    if (!data) {
+      showToast('报告数据未加载', 'error')
+      return
+    }
+
+    console.log('[AllTabsImage] 开始导出全部标签页')
+
+    setAllTabsExporting(true)
+
+    try {
+      // 临时显示所有tab内容，以便ECharts能够渲染
+      const overviewContent = document.getElementById('overview-tab-content')
+      const chartsContent = document.getElementById('charts-tab-content')
+      const summaryContent = document.getElementById('summary-tab-content')
+      const sourcesContent = document.getElementById('sources-tab-content')
+
+      if (!overviewContent || !chartsContent || !summaryContent || !sourcesContent) {
+        showToast('无法找到标签页内容', 'error')
+        return
+      }
+
+      // 保存原始的class状态
+      const originalClasses = {
+        overview: overviewContent.className,
+        charts: chartsContent.className,
+        summary: summaryContent.className,
+        sources: sourcesContent.className
+      }
+
+      // 临时显示所有tabs（保持space-y-6布局）
+      overviewContent.className = 'space-y-6'
+      chartsContent.className = 'space-y-6'
+      summaryContent.className = 'space-y-6'
+      sourcesContent.className = 'space-y-6'
+
+      console.log('[AllTabsImage] 所有tab已临时显示，等待渲染...')
+
+      // 等待ECharts完成渲染（需要一些时间让图表初始化/调整尺寸）
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      // 创建隐藏容器
+      const hiddenContainer = document.createElement('div')
+      hiddenContainer.id = 'hidden-export-container'
+      hiddenContainer.style.position = 'absolute'
+      hiddenContainer.style.left = '-9999px'
+      hiddenContainer.style.top = '0'
+      hiddenContainer.style.width = '1200px'
+      hiddenContainer.style.backgroundColor = '#ffffff'
+      hiddenContainer.style.padding = '20px'
+      hiddenContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif'
+
+      // 创建每个部分的标题和内容容器
+      const createSection = (title: string, content: HTMLElement) => {
+        const section = document.createElement('div')
+        section.style.marginBottom = '40px'
+
+        const titleEl = document.createElement('h2')
+        titleEl.textContent = title
+        titleEl.style.fontSize = '24px'
+        titleEl.style.fontWeight = 'bold'
+        titleEl.style.color = '#1f2937'
+        titleEl.style.marginBottom = '20px'
+        titleEl.style.paddingBottom = '10px'
+        titleEl.style.borderBottom = '2px solid #3b82f6'
+
+        section.appendChild(titleEl)
+        section.appendChild(content.cloneNode(true))
+
+        return section
+      }
+
+      // 添加所有部分
+      hiddenContainer.appendChild(createSection('总览', overviewContent))
+      hiddenContainer.appendChild(createSection('图表分析', chartsContent))
+      hiddenContainer.appendChild(createSection('深度总结', summaryContent))
+      hiddenContainer.appendChild(createSection('数据来源', sourcesContent))
+
+      // 添加到页面
+      document.body.appendChild(hiddenContainer)
+
+      console.log('[AllTabsImage] 隐藏容器已创建，开始生成图片')
+
+      // 使用 html2canvas-pro 导出
+      const canvas = await html2canvas(hiddenContainer, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 1200,
+        windowWidth: 1200
+      })
+
+      console.log('[AllTabsImage] Canvas生成成功:', canvas.width, 'x', canvas.height)
+
+      // 下载图片
+      const link = document.createElement('a')
+      link.download = `报告全部_${data.category}_${id}.png`
+      link.href = canvas.toDataURL('image/png')
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // 清理隐藏容器
+      document.body.removeChild(hiddenContainer)
+
+      // 恢复原始的class状态
+      overviewContent.className = originalClasses.overview
+      chartsContent.className = originalClasses.charts
+      summaryContent.className = originalClasses.summary
+      sourcesContent.className = originalClasses.sources
+
+      console.log('[AllTabsImage] 导出成功，状态已恢复')
+      showToast('全部标签页图片导出成功', 'success')
+    } catch (error) {
+      console.error('[AllTabsImage] 导出失败:', error)
+      showToast(`导出全部图片失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
+    } finally {
+      setAllTabsExporting(false)
+    }
+  }
 
   // 导出图片功能
   const exportImage = async () => {
@@ -216,6 +341,28 @@ const Report = () => {
             {tabs.map(t => <button key={t.key} onClick={() => setActiveTab(t.key as TabType)} className={`px-4 py-2 rounded-t-lg font-medium transition ${activeTab === t.key ? 'bg-white text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>{t.label}</button>)}
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleExportAllTabsImage}
+              disabled={allTabsExporting}
+              className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {allTabsExporting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  导出中...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  导出全部
+                </>
+              )}
+            </button>
             <button 
               onClick={exportImage}
               disabled={imageExporting}
@@ -285,8 +432,7 @@ const Report = () => {
           </div>
         </div>
 
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
+        <div className={activeTab === 'overview' ? 'space-y-6' : 'hidden'} id="overview-tab-content">
             <KeyStatsCards stats={data.stats || { total_videos: 0, total_comments: 0, comments_by_brand: {}}} brandCount={data.brands.length} />
             
             {/* 过滤开关 */}
@@ -397,10 +543,8 @@ const Report = () => {
               </div>
             )}
           </div>
-        )}
 
-        {activeTab === 'charts' && (
-          <div className="space-y-6">
+        <div className={activeTab === 'charts' ? 'space-y-6' : 'hidden'} id="charts-tab-content">
              <DimensionFilter dimensions={data.dimensions} selectedDimensions={currentDims} onChange={setSelectedDims} />
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                <BrandRadarChart data={data} />
@@ -412,18 +556,14 @@ const Report = () => {
              <BrandNetwork data={data} />
              <RadarBrandSelector data={data} />
           </div>
-        )}
 
-        {activeTab === 'summary' && (
-          <div className="space-y-6">
+        <div className={activeTab === 'summary' ? 'space-y-6' : 'hidden'} id="summary-tab-content">
             <CompetitorCompare rankings={data.rankings} dimensions={data.dimensions} />
             <DecisionTree dimensions={data.dimensions} rankings={data.rankings} />
             <EnhancedSummary recommendation={data.recommendation} />
           </div>
-        )}
 
-        {activeTab === 'sources' && (
-          <div className="space-y-6">
+        <div className={activeTab === 'sources' ? 'space-y-6' : 'hidden'} id="sources-tab-content">
             {data.video_sources && data.video_sources.length > 0 ? (
               <VideoSourceList videos={data.video_sources} />
             ) : (
@@ -434,7 +574,6 @@ const Report = () => {
               </div>
             )}
           </div>
-        )}
       </div>
       {selectedBrand && (
         <BrandDetailModal

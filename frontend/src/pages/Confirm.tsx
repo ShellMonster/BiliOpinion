@@ -189,11 +189,12 @@ const Confirm = () => {
                     onChange={(e) => setMaxComments(Number(e.target.value))}
                     className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium"
                   >
-                    <option value={100}>限制 100 条</option>
                     <option value={200}>限制 200 条</option>
                     <option value={500}>限制 500 条 (推荐)</option>
                     <option value={1000}>限制 1000 条</option>
                     <option value={2000}>限制 2000 条</option>
+                    <option value={5000}>限制 5000 条</option>
+                    <option value={10000}>限制 10000 条</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">分析评论数量</p>
                 </div>

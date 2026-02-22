@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import VideoInput from '../components/VideoInput'
 
 const Home = () => {
+  const [activeTab, setActiveTab] = useState<'product' | 'video'>('product')
   const [requirement, setRequirement] = useState('')
   const navigate = useNavigate()
 
@@ -31,7 +33,40 @@ const Home = () => {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mb-6">
+        {/* Tab 切换按钮区域 - 使用 flex 布局居中 */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex bg-gray-100 p-1 rounded-xl">
+            {/* 商品需求 Tab 按钮 */}
+            <button
+              onClick={() => setActiveTab('product')}
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
+                activeTab === 'product'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span className="mr-1.5">🔍</span>
+              商品需求
+            </button>
+            {/* 视频链接 Tab 按钮 */}
+            <button
+              onClick={() => setActiveTab('video')}
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
+                activeTab === 'video'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span className="mr-1.5">📺</span>
+              视频链接
+            </button>
+          </div>
+        </div>
+
+        {/* 根据选中的 Tab 显示不同内容 */}
+        {activeTab === 'product' ? (
+          /* 商品需求 Tab - 保持现有功能不变 */
+          <form onSubmit={handleSubmit} className="mb-6">
           <div className="relative">
             <input
               type="text"
@@ -51,7 +86,14 @@ const Home = () => {
             </button>
           </div>
         </form>
+        ) : (
+          /* 视频链接 Tab - 显示占位符组件 */
+          <div className="mb-6">
+            <VideoInput />
+          </div>
+        )}
 
+        {activeTab === 'product' && (
         <div className="flex items-center justify-center gap-x-1 gap-y-2 flex-wrap mb-16">
           <span className="text-sm text-gray-400">试试这些:</span>
           {examples.map((text, i) => (
@@ -61,9 +103,10 @@ const Home = () => {
               className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
             >
               {text}
-            </button>
-          ))}
+          </button>
+        ))}
         </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           <div>

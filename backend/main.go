@@ -56,6 +56,10 @@ func main() {
 		// 确认API - 用户确认AI解析结果，启动抓取和分析任务
 		apiGroup.POST("/confirm", api.HandleConfirm)
 
+		// 视频API - 解析视频URL和分析单个视频评论
+		apiGroup.POST("/video/parse", api.HandleVideoParse)
+		apiGroup.POST("/video/analyze", api.HandleVideoAnalyze)
+
 		// SSE接口 - 前端通过此接口接收任务实时进度
 		apiGroup.GET("/sse", sse.HandleSSE)
 

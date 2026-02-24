@@ -68,11 +68,20 @@ func (c *Client) Get(urlStr string, needSign bool) (*http.Response, error) {
 		return nil, err
 	}
 
-	// 设置必需的请求头
+	// 设置必需的请求头（模拟真实浏览器）
 	// User-Agent: 模拟Chrome浏览器
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Origin", "https://www.bilibili.com")
 	// Referer: B站主站（防止反爬）
 	req.Header.Set("Referer", "https://www.bilibili.com/")
+	req.Header.Set("Sec-Ch-Ua", `"Not_A Brand";v="8", "Chromium";v="120"`)
+	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
+	req.Header.Set("Sec-Ch-Ua-Platform", `"macOS"`)
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 
 	// 设置Cookie（如果提供）
 	if c.cookie != "" {

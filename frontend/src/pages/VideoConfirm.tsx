@@ -273,14 +273,14 @@ const VideoConfirm = () => {
         <div className="flex gap-4">
           <button
             onClick={handleCancel}
-            disabled={submitting}
+            disabled={submitting || dimensionsLoading}
             className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
           >
             取消
           </button>
           <button
             onClick={handleAnalyze}
-            disabled={submitting}
+            disabled={submitting || dimensionsLoading}
             className="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:transform-none"
           >
             {submitting ? (

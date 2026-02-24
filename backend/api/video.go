@@ -133,6 +133,7 @@ func HandleVideoDimensions(c *gin.Context) {
 	}
 
 	comments, err := client.SampleComments(req.BVID, 50)
+	log.Printf("评论采样结果: 数量=%d, 错误=%v", len(comments), err)
 	if err != nil {
 		comments = nil
 	}
@@ -141,6 +142,8 @@ func HandleVideoDimensions(c *gin.Context) {
 	if len(comments) > 0 {
 		if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, comments); err == nil {
 			dimensions = dims
+		} else {
+			log.Printf("AI生成维度失败，使用默认维度: %v", err)
 		}
 	}
 
@@ -175,7 +178,14 @@ func generateVideoDimensions(ctx context.Context, videoInfo *bilibili.VideoDetai
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	return aiClient.GenerateDimensions(ctx, videoInfo.Title, videoInfo.Description, comments)
+	log.Printf("调用AI生成维度: 标题=%s, 评论数=%d", videoInfo.Title, len(comments))
+	dims, err := aiClient.GenerateDimensions(ctx, videoInfo.Title, videoInfo.Description, comments)
+	if err != nil {
+		log.Printf("AI生成维度失败: %v", err)
+		return nil, err
+	}
+	log.Printf("AI生成维度成功: %d个维度", len(dims))
+	return dims, nil
 }
 
 // HandleVideoAnalyze 处理视频评论分析

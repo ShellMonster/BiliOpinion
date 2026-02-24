@@ -14,12 +14,23 @@ export interface VideoParseResponse {
   pub_date: string
   cover: string
   description?: string
-  dimensions?: Dimension[]
 }
 
 export interface VideoAnalyzeResponse {
   task_id: string
   message: string
+}
+
+export interface DimensionsRequest {
+  bvid: string
+}
+
+export interface DimensionsResponse {
+  dimensions: Dimension[]
+}
+
+export async function getDimensions(bvid: string): Promise<DimensionsResponse> {
+  return apiClient.post<DimensionsResponse>('/video/dimensions', { bvid })
 }
 
 export async function parseVideo(video_url: string): Promise<VideoParseResponse> {

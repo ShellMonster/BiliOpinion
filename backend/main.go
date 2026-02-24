@@ -58,6 +58,7 @@ func main() {
 
 		// 视频API - 解析视频URL和分析单个视频评论
 		apiGroup.POST("/video/parse", api.HandleVideoParse)
+		apiGroup.POST("/video/dimensions", api.HandleVideoDimensions)
 		apiGroup.POST("/video/analyze", api.HandleVideoAnalyze)
 
 		// SSE接口 - 前端通过此接口接收任务实时进度

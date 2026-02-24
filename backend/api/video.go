@@ -28,17 +28,16 @@ type VideoParseRequest struct {
 }
 
 // VideoParseResponse 视频解析响应
-// 返回视频的详细信息
+// 返回视频的详细信息（不包含维度，维度需要单独请求）
 type VideoParseResponse struct {
-	BVID         string         `json:"bvid"`          // 视频BV号
-	Title        string         `json:"title"`         // 视频标题
-	Author       string         `json:"author"`        // UP主名称
-	PlayCount    int            `json:"play_count"`    // 播放量
-	CommentCount int            `json:"comment_count"` // 评论数
-	PubDate      string         `json:"pub_date"`      // 发布时间
-	Cover        string         `json:"cover"`         // 封面图URL
-	Description  string         `json:"description"`   // 视频简介
-	Dimensions   []ai.Dimension `json:"dimensions"`    // AI生成的评价维度
+	BVID         string `json:"bvid"`          // 视频BV号
+	Title        string `json:"title"`         // 视频标题
+	Author       string `json:"author"`        // UP主名称
+	PlayCount    int    `json:"play_count"`    // 播放量
+	CommentCount int    `json:"comment_count"` // 评论数
+	PubDate      string `json:"pub_date"`      // 发布时间
+	Cover        string `json:"cover"`         // 封面图URL
+	Description  string `json:"description"`   // 视频简介
 }
 
 // VideoAnalyzeRequest 视频分析请求
@@ -58,7 +57,6 @@ type VideoAnalyzeResponse struct {
 // HandleVideoParse 处理视频URL解析
 // POST /api/video/parse
 // 解析视频URL，提取BV号并获取视频详细信息
-// 同时并行采样评论，调用AI生成评价维度
 func HandleVideoParse(c *gin.Context) {
 	var req VideoParseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -80,42 +78,10 @@ func HandleVideoParse(c *gin.Context) {
 	cookie := getBilibiliCookie()
 	client := bilibili.NewClient(cookie)
 
-	type videoResult struct {
-		info *bilibili.VideoDetail
-		err  error
-	}
-	type commentsResult struct {
-		comments []string
-		err      error
-	}
-
-	videoCh := make(chan videoResult, 1)
-	commentsCh := make(chan commentsResult, 1)
-
-	go func() {
-		info, err := client.GetVideoInfo(bvid)
-		videoCh <- videoResult{info: info, err: err}
-	}()
-
-	go func() {
-		comments, err := client.SampleComments(bvid, 50)
-		commentsCh <- commentsResult{comments: comments, err: err}
-	}()
-
-	videoRes := <-videoCh
-	if videoRes.err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("获取视频信息失败: %v", videoRes.err)})
+	videoInfo, err := client.GetVideoInfo(bvid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("获取视频信息失败: %v", err)})
 		return
-	}
-
-	commentsRes := <-commentsCh
-	videoInfo := videoRes.info
-
-	dimensions := getVideoDefaultDimensions()
-	if commentsRes.err == nil && len(commentsRes.comments) > 0 {
-		if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, commentsRes.comments); err == nil {
-			dimensions = dims
-		}
 	}
 
 	response := VideoParseResponse{
@@ -127,10 +93,58 @@ func HandleVideoParse(c *gin.Context) {
 		PubDate:      videoInfo.PubDate,
 		Cover:        videoInfo.Cover,
 		Description:  videoInfo.Description,
-		Dimensions:   dimensions,
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// VideoDimensionsRequest 视频维度生成请求
+type VideoDimensionsRequest struct {
+	BVID string `json:"bvid" binding:"required"`
+}
+
+// VideoDimensionsResponse 视频维度生成响应
+type VideoDimensionsResponse struct {
+	Dimensions []ai.Dimension `json:"dimensions"`
+}
+
+// HandleVideoDimensions 处理视频维度生成
+// POST /api/video/dimensions
+// 根据视频BVID采样评论，调用AI生成评价维度
+func HandleVideoDimensions(c *gin.Context) {
+	var req VideoDimensionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误: " + err.Error()})
+		return
+	}
+
+	if req.BVID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "BVID不能为空"})
+		return
+	}
+
+	cookie := getBilibiliCookie()
+	client := bilibili.NewClient(cookie)
+
+	videoInfo, err := client.GetVideoInfo(req.BVID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("获取视频信息失败: %v", err)})
+		return
+	}
+
+	comments, err := client.SampleComments(req.BVID, 50)
+	if err != nil {
+		comments = nil
+	}
+
+	dimensions := getVideoDefaultDimensions()
+	if len(comments) > 0 {
+		if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, comments); err == nil {
+			dimensions = dims
+		}
+	}
+
+	c.JSON(http.StatusOK, VideoDimensionsResponse{Dimensions: dimensions})
 }
 
 // getVideoDefaultDimensions 获取视频解析的默认评价维度

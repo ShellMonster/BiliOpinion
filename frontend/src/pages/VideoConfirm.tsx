@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { parseVideo, analyzeVideo, type VideoParseResponse } from '../api/video'
+import { parseVideo, analyzeVideo, getDimensions, type VideoParseResponse, type Dimension } from '../api/video'
 
-interface Dimension {
-  name: string
-  description: string
-}
+
 
 const defaultDimensions: Dimension[] = [
   { name: '性能表现', description: '产品的核心性能、功能实现程度' },
@@ -50,6 +47,8 @@ const VideoConfirm = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [videoInfo, setVideoInfo] = useState<VideoParseResponse | null>(null)
+  const [dimensions, setDimensions] = useState<Dimension[]>([])
+  const [dimensionsLoading, setDimensionsLoading] = useState(true)
   const [maxComments, setMaxComments] = useState(1000)
   const [submitting, setSubmitting] = useState(false)
 
@@ -66,10 +65,21 @@ const VideoConfirm = () => {
         setError('')
         const result = await parseVideo(videoUrl)
         setVideoInfo(result)
+        setLoading(false)
+
+        setDimensionsLoading(true)
+        try {
+          const dimensionsResult = await getDimensions(result.bvid)
+          setDimensions(dimensionsResult.dimensions)
+        } catch (err) {
+          console.error('Failed to fetch dimensions:', err)
+          setDimensions(defaultDimensions)
+        } finally {
+          setDimensionsLoading(false)
+        }
       } catch (err) {
         console.error('Failed to parse video:', err)
         setError('获取视频信息失败，请检查链接是否有效')
-      } finally {
         setLoading(false)
       }
     }
@@ -236,20 +246,27 @@ const VideoConfirm = () => {
             </svg>
             评价维度
             <span className="text-xs font-normal text-gray-400 ml-2">
-              ({(videoInfo.dimensions || defaultDimensions).length} 个维度)
+              ({dimensionsLoading ? '...' : (dimensions.length || defaultDimensions.length)} 个维度)
             </span>
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {(videoInfo.dimensions || defaultDimensions).map((dim) => (
-              <div
-                key={dim.name}
-                className="bg-gradient-to-br from-blue-50 to-indigo-50 backdrop-blur-sm rounded-xl p-4 border border-blue-100/50 hover:shadow-md transition-shadow"
-              >
-                <h5 className="font-bold text-slate-800 mb-1">{dim.name}</h5>
-                <p className="text-xs text-slate-500 leading-relaxed">{dim.description}</p>
-              </div>
-            ))}
-          </div>
+          {dimensionsLoading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto mb-3"></div>
+              <p className="text-gray-500">正在分析维度...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {(dimensions.length > 0 ? dimensions : defaultDimensions).map((dim) => (
+                <div
+                  key={dim.name}
+                  className="bg-gradient-to-br from-blue-50 to-indigo-50 backdrop-blur-sm rounded-xl p-4 border border-blue-100/50 hover:shadow-md transition-shadow"
+                >
+                  <h5 className="font-bold text-slate-800 mb-1">{dim.name}</h5>
+                  <p className="text-xs text-slate-500 leading-relaxed">{dim.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 操作按钮 */}

@@ -20,6 +20,9 @@ const commentOptions = [
   { value: 100, label: '100条' },
   { value: 500, label: '500条' },
   { value: 1000, label: '1000条（推荐）' },
+  { value: 2000, label: '2000条' },
+  { value: 5000, label: '5000条' },
+  { value: 10000, label: '10000条' },
   { value: 0, label: '全部评论' },
 ]
 
@@ -145,12 +148,21 @@ const VideoConfirm = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="glass-card p-6 space-y-6">
-          <div className="flex flex-col md:flex-row gap-6">
+        {/* 视频信息卡片 */}
+        <div className="glass-card p-6">
+          {/* 标题 - 居左 */}
+          <h2 className="text-xl font-bold text-gray-800 leading-tight mb-4">
+            {videoInfo.title}
+          </h2>
+          
+          {/* 封面图 + 信息 - 上下居中对齐 */}
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            {/* 左侧：封面图（放大） */}
             <div className="w-full md:w-64 flex-shrink-0">
               <div className="aspect-video rounded-xl overflow-hidden bg-gray-100 shadow-md">
                 {videoInfo.cover ? (
                   <img
+                    referrerPolicy="no-referrer"
                     src={videoInfo.cover}
                     alt={videoInfo.title}
                     className="w-full h-full object-cover"
@@ -166,33 +178,33 @@ const VideoConfirm = () => {
               </div>
             </div>
 
-            <div className="flex-1 space-y-4">
-              <h2 className="text-xl font-bold text-gray-800 leading-tight">
-                {videoInfo.title}
-              </h2>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
-                  <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">UP主</span>
-                  <p className="text-base font-semibold text-gray-800 mt-1">{videoInfo.author}</p>
-                </div>
-                <div className="bg-purple-50/50 rounded-lg p-3 border border-purple-100">
-                  <span className="text-xs font-medium text-purple-600 uppercase tracking-wider">发布时间</span>
-                  <p className="text-base font-semibold text-gray-800 mt-1">{formatDate(videoInfo.pub_date)}</p>
-                </div>
-                <div className="bg-green-50/50 rounded-lg p-3 border border-green-100">
-                  <span className="text-xs font-medium text-green-600 uppercase tracking-wider">播放量</span>
-                  <p className="text-base font-semibold text-gray-800 mt-1">{formatNumber(videoInfo.play_count)}</p>
-                </div>
-                <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100">
-                  <span className="text-xs font-medium text-orange-600 uppercase tracking-wider">评论数</span>
-                  <p className="text-base font-semibold text-gray-800 mt-1">{formatNumber(videoInfo.comment_count)}</p>
+            {/* 右侧：视频信息（靠右） */}
+            <div className="flex-1 w-full flex">
+              <div className="w-full ">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
+                    <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">UP主</span>
+                    <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{videoInfo.author}</p>
+                  </div>
+                  <div className="bg-purple-50/50 rounded-lg p-3 border border-purple-100">
+                    <span className="text-xs font-medium text-purple-600 uppercase tracking-wider">发布时间</span>
+                    <p className="text-sm font-semibold text-gray-800 mt-1">{formatDate(videoInfo.pub_date)}</p>
+                  </div>
+                  <div className="bg-green-50/50 rounded-lg p-3 border border-green-100">
+                    <span className="text-xs font-medium text-green-600 uppercase tracking-wider">播放量</span>
+                    <p className="text-sm font-semibold text-gray-800 mt-1">{formatNumber(videoInfo.play_count)}</p>
+                  </div>
+                  <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100">
+                    <span className="text-xs font-medium text-orange-600 uppercase tracking-wider">评论数</span>
+                    <p className="text-sm font-semibold text-gray-800 mt-1">{formatNumber(videoInfo.comment_count)}</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* 评论数量选择 */}
         <div className="glass-card p-6">
           <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
             <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,7 +215,7 @@ const VideoConfirm = () => {
           <select
             value={maxComments}
             onChange={(e) => setMaxComments(Number(e.target.value))}
-            className="w-full max-w-xs px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
+            className="w-full  px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-700 font-medium cursor-pointer"
           >
             {commentOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -216,6 +228,7 @@ const VideoConfirm = () => {
           </p>
         </div>
 
+        {/* 评价维度 */}
         <div className="glass-card p-6">
           <h4 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
             <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,6 +249,7 @@ const VideoConfirm = () => {
           </div>
         </div>
 
+        {/* 操作按钮 */}
         <div className="flex gap-4">
           <button
             onClick={handleCancel}

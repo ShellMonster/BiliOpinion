@@ -67,7 +67,7 @@ const VideoInput = () => {
     
     // 验证通过，跳转到确认页
     // 使用 encodeURIComponent 对URL进行编码，防止特殊字符导致的问题
-    navigate(`/video-confirm?url=${encodeURIComponent(url.trim())}`)
+    navigate(`/video-confirm?video_url=${encodeURIComponent(url.trim())}`)
   }
 
   return (

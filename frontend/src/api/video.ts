@@ -39,10 +39,12 @@ export async function parseVideo(video_url: string): Promise<VideoParseResponse>
 
 export async function analyzeVideo(
   video_url: string, 
-  max_comments: number
+  max_comments: number,
+  dimensions?: Dimension[]  // 可选的分析维度
 ): Promise<VideoAnalyzeResponse> {
   return apiClient.post<VideoAnalyzeResponse>('/video/analyze', { 
     video_url, 
-    max_comments 
+    max_comments,
+    dimensions  // 传递维度到后端
   })
 }

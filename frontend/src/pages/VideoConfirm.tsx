@@ -89,10 +89,13 @@ const VideoConfirm = () => {
 
   const handleAnalyze = async () => {
     if (!videoUrl || !videoInfo || submitting) return
-
-    setSubmitting(true)
     try {
-      const result = await analyzeVideo(videoUrl, maxComments)
+      // 传递维度到 API，如果维度为空则不传递（使用后端默认维度）
+      const result = await analyzeVideo(
+        videoUrl, 
+        maxComments,
+        dimensions.length > 0 ? dimensions : undefined
+      )
       navigate(`/progress/${result.task_id}?title=${encodeURIComponent(videoInfo.title)}`)
     } catch (err) {
       console.error('Failed to start analysis:', err)

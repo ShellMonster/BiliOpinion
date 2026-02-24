@@ -45,6 +45,10 @@ type VideoParseResponse struct {
 type VideoAnalyzeRequest struct {
 	VideoURL    string `json:"video_url" binding:"required"` // B站视频链接
 	MaxComments int    `json:"max_comments,omitempty"`       // 最大分析评论数，默认1000
+	Dimensions  []struct { // 前端传递的分析维度，可选
+		Name        string `json:"name"`        // 维度名称
+		Description string `json:"description"` // 维度描述
+	} `json:"dimensions,omitempty"` 
 }
 
 // VideoAnalyzeResponse 视频分析响应
@@ -224,8 +228,8 @@ func HandleVideoAnalyze(c *gin.Context) {
 	// 创建SSE任务通道
 	sse.CreateTaskChannel(taskID)
 
-	// 异步启动视频分析任务
-	go executeVideoAnalyzeTask(taskID, req.VideoURL, maxComments)
+	// 异步启动视频分析任务（传递维度参数）
+	go executeVideoAnalyzeTask(taskID, req.VideoURL, maxComments, req.Dimensions)
 
 	// 立即返回任务ID
 	c.JSON(http.StatusOK, VideoAnalyzeResponse{
@@ -241,7 +245,10 @@ func HandleVideoAnalyze(c *gin.Context) {
 // 3. 抓取视频评论
 // 4. AI分析评论
 // 5. 生成分析报告
-func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int) {
+func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDimensions []struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}) {
 	// 确保任务结束时关闭SSE通道
 	defer sse.CloseTaskChannel(taskID)
 
@@ -347,8 +354,16 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int) {
 		sse.PushProgress(taskID, sse.StatusAnalyzing, progress, 100, message)
 	})
 
-	// 使用固定的6个默认评价维度
-	dimensions := getDefaultDimensions()
+	// 使用传递的维度，若为空则使用默认维度
+	var dimensions []ai.Dimension
+	if len(requestDimensions) > 0 {
+		dimensions = make([]ai.Dimension, len(requestDimensions))
+		for i, d := range requestDimensions {
+			dimensions[i] = ai.Dimension{Name: d.Name, Description: d.Description}
+		}
+	} else {
+		dimensions = getDefaultDimensions()
+	}
 
 	// 准备评论数据用于AI分析
 	comments := getAllCommentsWithVideo(scrapeResult)

@@ -8,6 +8,7 @@ import (
 	"bilibili-analyzer/backend/models"
 	"bilibili-analyzer/backend/report"
 	"bilibili-analyzer/backend/sse"
+	"bilibili-analyzer/backend/task"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -43,12 +44,12 @@ type VideoParseResponse struct {
 // VideoAnalyzeRequest 视频分析请求
 // 用于启动单个视频的评论分析任务
 type VideoAnalyzeRequest struct {
-	VideoURL    string `json:"video_url" binding:"required"` // B站视频链接
-	MaxComments int    `json:"max_comments,omitempty"`       // 最大分析评论数，默认1000
+	VideoURL    string     `json:"video_url" binding:"required"` // B站视频链接
+	MaxComments int        `json:"max_comments,omitempty"`       // 最大分析评论数，默认1000
 	Dimensions  []struct { // 前端传递的分析维度，可选
 		Name        string `json:"name"`        // 维度名称
 		Description string `json:"description"` // 维度描述
-	} `json:"dimensions,omitempty"` 
+	} `json:"dimensions,omitempty"`
 }
 
 // VideoAnalyzeResponse 视频分析响应
@@ -143,12 +144,11 @@ func HandleVideoDimensions(c *gin.Context) {
 	}
 
 	dimensions := getVideoDefaultDimensions()
-	if len(comments) > 0 {
-		if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, comments); err == nil {
-			dimensions = dims
-		} else {
-			log.Printf("AI生成维度失败，使用默认维度: %v", err)
-		}
+	// 即使评论采样失败，也尝试基于标题和简介生成维度；仅在AI失败时回退默认值。
+	if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, comments); err == nil {
+		dimensions = dims
+	} else {
+		log.Printf("AI生成维度失败，使用默认维度: %v", err)
 	}
 
 	c.JSON(http.StatusOK, VideoDimensionsResponse{Dimensions: dimensions})
@@ -368,17 +368,35 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	// 准备评论数据用于AI分析
 	comments := getAllCommentsWithVideo(scrapeResult)
 
-	// 过滤短评论
+	// 统一评论质量过滤（长度、纯符号、热度排序）
+	rawComments := make([]bilibili.Comment, 0, len(comments))
+	commentMetaByKey := make(map[string]commentWithVideo, len(comments))
+	for _, c := range comments {
+		rawComments = append(rawComments, c.Comment)
+		if _, exists := commentMetaByKey[c.CommentKey]; !exists {
+			commentMetaByKey[c.CommentKey] = c
+		}
+	}
+
+	filteredComments := comment.FilterAndRank(rawComments, comment.FilterConfig{
+		MaxComments: maxComments,
+		MinLength:   10,
+		FilterEmoji: true,
+	})
+
+	// 过滤后构建 AI 输入
 	var inputs []ai.CommentInput
-	for i, c := range comments {
-		if len(strings.TrimSpace(c.Content)) < 5 {
+	for i, c := range filteredComments {
+		key := buildCommentKey(c)
+		meta, ok := commentMetaByKey[key]
+		if !ok || len(strings.TrimSpace(meta.Content)) < 5 {
 			continue
 		}
 		inputs = append(inputs, ai.CommentInput{
 			ID:         fmt.Sprintf("comment_%d", i),
-			Content:    c.Content,
-			VideoTitle: c.VideoTitle,
-			VideoBVID:  c.VideoBVID,
+			Content:    meta.Content,
+			VideoTitle: meta.VideoTitle,
+			VideoBVID:  meta.VideoBVID,
 		})
 	}
 
@@ -386,11 +404,6 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 		updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, "没有有效的评论可分析")
 		return
-	}
-
-	// 截断到最大评论数
-	if len(inputs) > maxComments {
-		inputs = inputs[:maxComments]
 	}
 
 	// 执行AI分析
@@ -598,6 +611,8 @@ type commentWithVideo struct {
 	Content    string
 	VideoTitle string
 	VideoBVID  string
+	Comment    bilibili.Comment
+	CommentKey string
 }
 
 func getAllCommentsWithVideo(result *bilibili.ScrapeResult) []commentWithVideo {
@@ -611,17 +626,23 @@ func getAllCommentsWithVideo(result *bilibili.ScrapeResult) []commentWithVideo {
 	for bvid, videoComments := range result.Comments {
 		videoTitle := videoTitleMap[bvid]
 		for _, c := range videoComments {
+			cKey := buildCommentKey(c)
 			comments = append(comments, commentWithVideo{
 				Content:    c.Content.Message,
 				VideoTitle: videoTitle,
 				VideoBVID:  bvid,
+				Comment:    c,
+				CommentKey: cKey,
 			})
 			// 添加回复
 			for _, r := range c.Replies {
+				rKey := buildCommentKey(r)
 				comments = append(comments, commentWithVideo{
 					Content:    r.Content.Message,
 					VideoTitle: videoTitle,
 					VideoBVID:  bvid,
+					Comment:    r,
+					CommentKey: rKey,
 				})
 			}
 		}
@@ -647,6 +668,9 @@ func processAnalysisResults(results []ai.CommentAnalysisResult) map[string][]rep
 		// 清洗品牌和型号
 		brand = comment.CleanBrandName(brand, nil)
 		model := comment.CleanModelName(r.Model)
+		if model == "" || model == "未知" || model == "通用" {
+			model = task.ExtractModelFromContent(r.Content)
+		}
 
 		commentItem := report.CommentWithScore{
 			Content:     r.Content,
@@ -660,6 +684,13 @@ func processAnalysisResults(results []ai.CommentAnalysisResult) map[string][]rep
 	}
 
 	return brandResults
+}
+
+func buildCommentKey(c bilibili.Comment) string {
+	if c.RPID > 0 {
+		return fmt.Sprintf("rpid_%d", c.RPID)
+	}
+	return fmt.Sprintf("fallback_%d_%s", c.Ctime, strings.TrimSpace(c.Content.Message))
 }
 
 // getBrandList 获取品牌列表

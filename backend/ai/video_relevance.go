@@ -106,10 +106,22 @@ func (c *VideoRelevanceChecker) CheckRelevance(
 	var result CheckRelevanceResponse
 	if err := json.Unmarshal([]byte(response), &result); err != nil {
 		// 如果解析失败，尝试从文本中提取（容错处理）
-		// 检查响应中是否包含"true"或"相关"关键词
-		isRelevant = strings.Contains(response, "true") || strings.Contains(strings.ToLower(response), "相关")
-		reason = response
-		return isRelevant, reason, nil
+		// 注意：必须优先处理"不相关"，避免被"相关"子串误判。
+		text := strings.ToLower(strings.TrimSpace(response))
+		switch {
+		case strings.Contains(text, "\"is_relevant\":false"),
+			strings.Contains(text, "is_relevant:false"),
+			strings.Contains(text, "不相关"):
+			return false, response, nil
+		case strings.Contains(text, "\"is_relevant\":true"),
+			strings.Contains(text, "is_relevant:true"),
+			strings.Contains(text, "相关"),
+			strings.Contains(text, "true"):
+			return true, response, nil
+		default:
+			// 无法判断时默认相关，避免误杀潜在有效视频。
+			return true, response, nil
+		}
 	}
 
 	return result.IsRelevant, result.Reason, nil

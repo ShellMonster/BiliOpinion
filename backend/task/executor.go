@@ -28,10 +28,31 @@ var modelPatterns = []*regexp.Regexp{
 
 // AppSettings 应用配置（从数据库读取后的结构化配置）
 type AppSettings struct {
-	AIBaseURL      string
-	AIAPIKey       string
-	AIModel        string
-	BilibiliCookie string
+	AIBaseURL                   string
+	AIAPIKey                    string
+	AIModel                     string
+	BilibiliCookie              string
+	BrandDiscovery              bool
+	DiscoveryMainThreshold      float64
+	DiscoveryCandidateThreshold float64
+	DiscoveryMinComments        int
+	DiscoveryMinVideos          int
+}
+
+type brandDiscoveryConfig struct {
+	Enabled            bool
+	MainThreshold      float64
+	CandidateThreshold float64
+	MinComments        int
+	MinVideos          int
+}
+
+type brandDiscoverySignal struct {
+	CommentCount     int
+	VideoCount       int
+	CategoryHitRatio float64
+	ModelHitRatio    float64
+	Score            float64
 }
 
 // TaskConfig 任务配置
@@ -81,6 +102,8 @@ type CommentWithVideo struct {
 	Content    string // 评论内容
 	VideoTitle string // 视频标题
 	VideoBVID  string // 视频BVID
+	Comment    bilibili.Comment
+	CommentKey string
 }
 
 // Executor 任务执行器
@@ -267,7 +290,16 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 		sse.PushProgress(taskID, sse.StatusAnalyzing, progress, 100, message)
 	})
 
-	analysisResults, err := e.analyzeComments(ctx, taskID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement)
+	discoveryCfg := brandDiscoveryConfig{
+		Enabled:            settings.BrandDiscovery,
+		MainThreshold:      settings.DiscoveryMainThreshold,
+		CandidateThreshold: settings.DiscoveryCandidateThreshold,
+		MinComments:        settings.DiscoveryMinComments,
+		MinVideos:          settings.DiscoveryMinVideos,
+	}
+	analysisResults, err := e.analyzeComments(
+		ctx, taskID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement, discoveryCfg,
+	)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, fmt.Sprintf("AI分析失败: %v", err))
@@ -403,10 +435,15 @@ func (e *Executor) loadSettings() (*AppSettings, error) {
 	}
 
 	settings := &AppSettings{
-		AIBaseURL:      getSettingValue(models.SettingKeyAIAPIBase),
-		AIAPIKey:       getSettingValue(models.SettingKeyAIAPIKey),
-		AIModel:        getSettingValue(models.SettingKeyAIModel),
-		BilibiliCookie: getSettingValue(models.SettingKeyBilibiliCookie),
+		AIBaseURL:                   getSettingValue(models.SettingKeyAIAPIBase),
+		AIAPIKey:                    getSettingValue(models.SettingKeyAIAPIKey),
+		AIModel:                     getSettingValue(models.SettingKeyAIModel),
+		BilibiliCookie:              getSettingValue(models.SettingKeyBilibiliCookie),
+		BrandDiscovery:              parseBoolSetting(getSettingValue("brand_discovery_mode")),
+		DiscoveryMainThreshold:      parseFloatSetting(getSettingValue("brand_discovery_main_threshold"), 0.80),
+		DiscoveryCandidateThreshold: parseFloatSetting(getSettingValue("brand_discovery_candidate_threshold"), 0.60),
+		DiscoveryMinComments:        parseIntSetting(getSettingValue("brand_discovery_min_comments"), 3),
+		DiscoveryMinVideos:          parseIntSetting(getSettingValue("brand_discovery_min_videos"), 2),
 	}
 
 	if settings.AIAPIKey == "" {
@@ -414,6 +451,15 @@ func (e *Executor) loadSettings() (*AppSettings, error) {
 	}
 	if settings.BilibiliCookie == "" {
 		return nil, fmt.Errorf("请先配置B站Cookie")
+	}
+	if settings.DiscoveryCandidateThreshold > settings.DiscoveryMainThreshold {
+		settings.DiscoveryCandidateThreshold = settings.DiscoveryMainThreshold
+	}
+	if settings.DiscoveryMinComments < 1 {
+		settings.DiscoveryMinComments = 1
+	}
+	if settings.DiscoveryMinVideos < 1 {
+		settings.DiscoveryMinVideos = 1
 	}
 
 	// 读取抓取并发数配置
@@ -570,6 +616,7 @@ func (e *Executor) analyzeComments(
 	keywords []string,
 	dimensions []ai.Dimension,
 	category string,
+	discoveryCfg brandDiscoveryConfig,
 ) (map[string][]report.CommentWithScore, error) {
 
 	// 1. 使用 GetAllCommentsWithVideo 获取评论
@@ -578,30 +625,53 @@ func (e *Executor) analyzeComments(
 		return nil, fmt.Errorf("没有获取到任何评论")
 	}
 
-	// 2. 构建 AI 输入
-	// 简单过滤：保留长度大于等于5的评论
+	// 2. 统一评论质量过滤（长度、纯符号、热度/关键词排序）
+	rawComments := make([]bilibili.Comment, 0, len(allComments))
+	commentMetaByKey := make(map[string]CommentWithVideo, len(allComments))
+	for _, c := range allComments {
+		rawComments = append(rawComments, c.Comment)
+		if _, exists := commentMetaByKey[c.CommentKey]; !exists {
+			commentMetaByKey[c.CommentKey] = c
+		}
+	}
+
+	filteredComments := comment.FilterAndRank(rawComments, comment.FilterConfig{
+		MaxComments: e.config.MaxComments,
+		Keywords:    keywords,
+		MinLength:   10,
+		FilterEmoji: true,
+	})
+
+	if len(filteredComments) == 0 {
+		return nil, fmt.Errorf("过滤后没有有效评论")
+	}
+
+	// 3. 构建 AI 输入（按过滤后的优先级顺序）
 	var inputs []ai.CommentInput
-	for i, c := range allComments {
-		if len(strings.TrimSpace(c.Content)) < 5 {
+	commentVideoByID := make(map[string]string, len(filteredComments))
+	for i, c := range filteredComments {
+		key := buildCommentKey(c)
+		meta, ok := commentMetaByKey[key]
+		if !ok {
+			// 极少数情况下key对不上，直接跳过，避免脏数据进入分析
 			continue
 		}
-
+		if len(strings.TrimSpace(meta.Content)) < 5 {
+			continue
+		}
+		commentID := fmt.Sprintf("comment_%d", i)
 		inputs = append(inputs, ai.CommentInput{
-			ID:         fmt.Sprintf("comment_%d", i),
-			Content:    c.Content,
-			VideoTitle: c.VideoTitle,
-			VideoBVID:  c.VideoBVID,
+			ID:         commentID,
+			Content:    meta.Content,
+			VideoTitle: meta.VideoTitle,
+			VideoBVID:  meta.VideoBVID,
 		})
+		commentVideoByID[commentID] = meta.VideoBVID
 	}
 
 	// 如果过滤后没有评论，返回错误
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("过滤后没有有效评论")
-	}
-
-	// 截断到最大评论数
-	if len(inputs) > e.config.MaxComments {
-		inputs = inputs[:e.config.MaxComments]
 	}
 
 	log.Printf("[Task %s] Prepared %d comments for analysis", taskID, len(inputs))
@@ -689,6 +759,8 @@ func (e *Executor) analyzeComments(
 	// 分类收集结果：指定品牌 vs 发现的新品牌
 	specifiedResults := make(map[string][]report.CommentWithScore)
 	discoveredResults := make(map[string][]report.CommentWithScore)
+	discoverySignals := make(map[string]*brandDiscoverySignal)
+	discoveredVideoSets := make(map[string]map[string]struct{})
 
 	for _, r := range analysisResults {
 		if r.Error != "" || r.Scores == nil {
@@ -713,9 +785,9 @@ func (e *Executor) analyzeComments(
 			continue // 仍然没有品牌则跳过
 		}
 
-		// 型号后备提取：仅在AI未提取到型号时使用正则匹配
+		// 型号后备提取：仅在AI未提取到有效型号时使用正则匹配
 		model := r.Model
-		if model == "" || model == "未知" {
+		if model == "" || model == "未知" || model == "通用" {
 			model = extractModelFromContent(r.Content)
 		}
 
@@ -726,7 +798,7 @@ func (e *Executor) analyzeComments(
 		commentItem := report.CommentWithScore{
 			Content:     r.Content,
 			Scores:      r.Scores,
-			Brand:       r.Brand,
+			Brand:       brand,
 			Model:       model,
 			PublishTime: publishTime,
 		}
@@ -744,14 +816,46 @@ func (e *Executor) analyzeComments(
 			}
 		}
 
-		if !isSpecified {
-			// 这是新发现的品牌 - 保留它！
+		if !isSpecified && discoveryCfg.Enabled {
+			// 可选：发现新品牌模式开启时，保留新品牌。
 			discoveredResults[brand] = append(discoveredResults[brand], commentItem)
+			signal := discoverySignals[brand]
+			if signal == nil {
+				signal = &brandDiscoverySignal{}
+				discoverySignals[brand] = signal
+			}
+			signal.CommentCount++
+			if commentItem.Model != "" && commentItem.Model != "未知" && commentItem.Model != "通用" && isLikelyModelText(commentItem.Model) {
+				signal.ModelHitRatio += 1
+			}
+			if strings.Contains(strings.ToLower(commentItem.Content), strings.ToLower(strings.TrimSpace(category))) {
+				signal.CategoryHitRatio += 1
+			}
+			if bvid := strings.TrimSpace(commentVideoByID[r.CommentID]); bvid != "" {
+				if discoveredVideoSets[brand] == nil {
+					discoveredVideoSets[brand] = make(map[string]struct{})
+				}
+				discoveredVideoSets[brand][bvid] = struct{}{}
+			}
+		}
+	}
+
+	// 补充发现品牌的视频覆盖数并计算最终分数
+	if discoveryCfg.Enabled {
+		for brand := range discoveredResults {
+			signal := discoverySignals[brand]
+			if signal == nil || signal.CommentCount == 0 {
+				continue
+			}
+			signal.VideoCount = len(discoveredVideoSets[brand])
+			signal.CategoryHitRatio = safeRatio(signal.CategoryHitRatio, float64(signal.CommentCount))
+			signal.ModelHitRatio = safeRatio(signal.ModelHitRatio, float64(signal.CommentCount))
+			signal.Score = computeDiscoveryScore(*signal)
 		}
 	}
 
 	// 记录发现的新品牌
-	if len(discoveredResults) > 0 {
+	if discoveryCfg.Enabled && len(discoveredResults) > 0 {
 		var discoveredBrandNames []string
 		for brand := range discoveredResults {
 			discoveredBrandNames = append(discoveredBrandNames, brand)
@@ -766,8 +870,33 @@ func (e *Executor) analyzeComments(
 		log.Printf("[Task %s] 指定品牌 %s: %d 条评论", taskID, brand, len(comments))
 	}
 	for brand, comments := range discoveredResults {
-		results[brand] = comments
-		log.Printf("[Task %s] 发现品牌 %s: %d 条评论", taskID, brand, len(comments))
+		if !discoveryCfg.Enabled {
+			continue
+		}
+		signal := discoverySignals[brand]
+		if signal == nil {
+			continue
+		}
+		if signal.CommentCount < discoveryCfg.MinComments || signal.VideoCount < discoveryCfg.MinVideos {
+			log.Printf("[Task %s] 发现品牌 %s 被拒绝: 评论/覆盖不足 (comments=%d, coverage=%d)",
+				taskID, brand, signal.CommentCount, signal.VideoCount)
+			continue
+		}
+
+		comments = sanitizeDiscoveredModels(comments)
+
+		switch {
+		case signal.Score >= discoveryCfg.MainThreshold:
+			results[brand] = comments
+			log.Printf("[Task %s] 发现品牌 %s 进入主榜: score=%.2f comments=%d coverage=%d",
+				taskID, brand, signal.Score, signal.CommentCount, signal.VideoCount)
+		case signal.Score >= discoveryCfg.CandidateThreshold:
+			log.Printf("[Task %s] 发现品牌 %s 进入候选池: score=%.2f comments=%d coverage=%d",
+				taskID, brand, signal.Score, signal.CommentCount, signal.VideoCount)
+		default:
+			log.Printf("[Task %s] 发现品牌 %s 被丢弃: score=%.2f comments=%d coverage=%d",
+				taskID, brand, signal.Score, signal.CommentCount, signal.VideoCount)
+		}
 	}
 
 	return results, nil
@@ -960,6 +1089,11 @@ func extractModelFromContent(content string) string {
 	return ""
 }
 
+// ExtractModelFromContent 供其他模块复用的型号后备提取能力。
+func ExtractModelFromContent(content string) string {
+	return extractModelFromContent(content)
+}
+
 // collectDiscoveredBrands 从分析结果中收集已发现的品牌
 func collectDiscoveredBrands(results []ai.CommentAnalysisResult) []string {
 	brandSet := make(map[string]bool)
@@ -992,20 +1126,142 @@ func GetAllCommentsWithVideo(result *bilibili.ScrapeResult) []CommentWithVideo {
 	for bvid, videoComments := range result.Comments {
 		videoTitle := videoTitleMap[bvid]
 		for _, c := range videoComments {
+			cKey := buildCommentKey(c)
 			comments = append(comments, CommentWithVideo{
 				Content:    c.Content.Message,
 				VideoTitle: videoTitle,
 				VideoBVID:  bvid,
+				Comment:    c,
+				CommentKey: cKey,
 			})
 			for _, r := range c.Replies {
+				rKey := buildCommentKey(r)
 				comments = append(comments, CommentWithVideo{
 					Content:    r.Content.Message,
 					VideoTitle: videoTitle,
 					VideoBVID:  bvid,
+					Comment:    r,
+					CommentKey: rKey,
 				})
 			}
 		}
 	}
 
 	return comments
+}
+
+func buildCommentKey(c bilibili.Comment) string {
+	// 正常情况下 RPID 全局唯一；若异常缺失，退化为内容+时间组合键。
+	if c.RPID > 0 {
+		return fmt.Sprintf("rpid_%d", c.RPID)
+	}
+	return fmt.Sprintf("fallback_%d_%s", c.Ctime, strings.TrimSpace(c.Content.Message))
+}
+
+func computeDiscoveryScore(signal brandDiscoverySignal) float64 {
+	commentScore := clamp01(float64(signal.CommentCount) / 8.0)
+	videoScore := clamp01(float64(signal.VideoCount) / 3.0)
+	categoryScore := clamp01(signal.CategoryHitRatio)
+	modelScore := clamp01(signal.ModelHitRatio)
+	return 0.35*commentScore + 0.25*videoScore + 0.20*categoryScore + 0.20*modelScore
+}
+
+func sanitizeDiscoveredModels(comments []report.CommentWithScore) []report.CommentWithScore {
+	if len(comments) == 0 {
+		return comments
+	}
+	modelCount := make(map[string]int)
+	for _, c := range comments {
+		model := strings.TrimSpace(c.Model)
+		if model == "" || model == "未知" || model == "通用" {
+			continue
+		}
+		modelCount[strings.ToLower(model)]++
+	}
+
+	out := make([]report.CommentWithScore, len(comments))
+	copy(out, comments)
+	for i := range out {
+		model := strings.TrimSpace(out[i].Model)
+		if model == "" || model == "未知" || model == "通用" {
+			continue
+		}
+		if modelCount[strings.ToLower(model)] < 2 || !isLikelyModelText(model) {
+			out[i].Model = "通用"
+		}
+	}
+	return out
+}
+
+func isLikelyModelText(model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" || len([]rune(model)) < 2 {
+		return false
+	}
+	for _, re := range modelPatterns {
+		if re.MatchString(model) {
+			return true
+		}
+	}
+	// 型号通常包含数字、字母数字混合或常见后缀词
+	lower := strings.ToLower(model)
+	hasDigit := false
+	for _, r := range model {
+		if r >= '0' && r <= '9' {
+			hasDigit = true
+			break
+		}
+	}
+	if hasDigit {
+		return true
+	}
+	return strings.Contains(lower, "pro") || strings.Contains(lower, "max") || strings.Contains(lower, "ultra")
+}
+
+func parseIntSetting(s string, defaultValue int) int {
+	if strings.TrimSpace(s) == "" {
+		return defaultValue
+	}
+	val, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return defaultValue
+	}
+	return val
+}
+
+func parseFloatSetting(s string, defaultValue float64) float64 {
+	if strings.TrimSpace(s) == "" {
+		return defaultValue
+	}
+	val, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		return defaultValue
+	}
+	return val
+}
+
+func safeRatio(numerator, denominator float64) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return numerator / denominator
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func parseBoolSetting(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "true", "yes", "on", "enabled":
+		return true
+	default:
+		return false
+	}
 }

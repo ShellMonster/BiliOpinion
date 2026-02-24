@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -120,6 +121,11 @@ func (c *Client) GetComments(req GetCommentsRequest) ([]Comment, int, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	// 在解析JSON前检查响应是否为HTML错误页面（如412风控页面）
+	if strings.HasPrefix(strings.TrimSpace(string(body)), "<!DOCTYPE") {
+		return nil, 0, fmt.Errorf("B站返回错误页面（可能是Cookie过期或触发风控），请更新Cookie后重试")
 	}
 
 	// 解析JSON响应

@@ -175,7 +175,7 @@ func generateVideoDimensions(ctx context.Context, videoInfo *bilibili.VideoDetai
 		Model:   settings.AIModel,
 	})
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	log.Printf("调用AI生成维度: 标题=%s, 评论数=%d", videoInfo.Title, len(comments))

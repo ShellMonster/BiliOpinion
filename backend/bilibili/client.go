@@ -26,7 +26,7 @@ type Client struct {
 func NewClient(cookie string) *Client {
 	return &Client{
 		httpClient: &http.Client{
-			Timeout: 20 * time.Second, // 设置20秒超时
+			Timeout: 60 * time.Second, // 设置20秒超时
 		},
 		cookie: cookie,
 	}

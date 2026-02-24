@@ -56,6 +56,14 @@ func cleanJSONResponse(response string) string {
 	response = strings.TrimSpace(response)
 
 	// 如果还有问题，尝试用正则提取JSON对象
+	// 如果是JSON数组开头，尝试提取 [...] 部分
+	if strings.HasPrefix(response, "[") {
+		re := regexp.MustCompile(`(?s)\[.*\]`)
+		if match := re.FindString(response); match != "" {
+			response = match
+		}
+		return response
+	}
 	if !strings.HasPrefix(response, "{") {
 		// 尝试提取 {...} 部分
 		re := regexp.MustCompile(`(?s)\{.*\}`)

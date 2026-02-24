@@ -1,5 +1,10 @@
 import { apiClient } from './client'
 
+export interface Dimension {
+  name: string
+  description: string
+}
+
 export interface VideoParseResponse {
   bvid: string
   title: string
@@ -8,6 +13,8 @@ export interface VideoParseResponse {
   comment_count: number
   pub_date: string
   cover: string
+  description?: string
+  dimensions?: Dimension[]
 }
 
 export interface VideoAnalyzeResponse {

@@ -235,9 +235,12 @@ const VideoConfirm = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             评价维度
+            <span className="text-xs font-normal text-gray-400 ml-2">
+              ({(videoInfo.dimensions || defaultDimensions).length} 个维度)
+            </span>
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {defaultDimensions.map((dim) => (
+            {(videoInfo.dimensions || defaultDimensions).map((dim) => (
               <div
                 key={dim.name}
                 className="bg-gradient-to-br from-blue-50 to-indigo-50 backdrop-blur-sm rounded-xl p-4 border border-blue-100/50 hover:shadow-md transition-shadow"

@@ -18,6 +18,7 @@ type VideoDetail struct {
 	CommentCount int    `json:"comment_count"` // 评论数
 	PubDate      string `json:"pub_date"`      // 发布时间（格式化后的字符串）
 	Cover        string `json:"cover"`         // 视频封面图URL
+	Description  string `json:"description"`   // 视频简介
 }
 
 // videoDetailAPIResponse B站视频信息API的响应结构
@@ -28,6 +29,7 @@ type videoDetailAPIResponse struct {
 		BVID  string `json:"bvid"`  // 视频BV号
 		AID   int64  `json:"aid"`   // 视频AV号
 		Title string `json:"title"` // 视频标题
+		Desc  string `json:"desc"`  // 视频简介
 		Owner struct {
 			MID  int64  `json:"mid"`  // UP主ID
 			Name string `json:"name"` // UP主名称
@@ -102,5 +104,6 @@ func (c *Client) GetVideoInfo(bvid string) (*VideoDetail, error) {
 		CommentCount: apiResp.Data.Stat.Reply,
 		PubDate:      pubDate,
 		Cover:        apiResp.Data.Pic,
+		Description:  apiResp.Data.Desc,
 	}, nil
 }

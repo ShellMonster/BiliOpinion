@@ -30,13 +30,15 @@ type VideoParseRequest struct {
 // VideoParseResponse 视频解析响应
 // 返回视频的详细信息
 type VideoParseResponse struct {
-	BVID         string `json:"bvid"`          // 视频BV号
-	Title        string `json:"title"`         // 视频标题
-	Author       string `json:"author"`        // UP主名称
-	PlayCount    int    `json:"play_count"`    // 播放量
-	CommentCount int    `json:"comment_count"` // 评论数
-	PubDate      string `json:"pub_date"`      // 发布时间
-	Cover        string `json:"cover"`         // 封面图URL
+	BVID         string         `json:"bvid"`          // 视频BV号
+	Title        string         `json:"title"`         // 视频标题
+	Author       string         `json:"author"`        // UP主名称
+	PlayCount    int            `json:"play_count"`    // 播放量
+	CommentCount int            `json:"comment_count"` // 评论数
+	PubDate      string         `json:"pub_date"`      // 发布时间
+	Cover        string         `json:"cover"`         // 封面图URL
+	Description  string         `json:"description"`   // 视频简介
+	Dimensions   []ai.Dimension `json:"dimensions"`    // AI生成的评价维度
 }
 
 // VideoAnalyzeRequest 视频分析请求
@@ -56,14 +58,7 @@ type VideoAnalyzeResponse struct {
 // HandleVideoParse 处理视频URL解析
 // POST /api/video/parse
 // 解析视频URL，提取BV号并获取视频详细信息
-//
-// 请求示例：
-//
-//	{"video_url": "https://www.bilibili.com/video/BV1mH4y1u7UA"}
-//
-// 响应示例：
-//
-//	{"bvid": "BV1mH4y1u7UA", "title": "...", "author": "...", "play_count": 1000, ...}
+// 同时并行采样评论，调用AI生成评价维度
 func HandleVideoParse(c *gin.Context) {
 	var req VideoParseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -71,31 +66,58 @@ func HandleVideoParse(c *gin.Context) {
 		return
 	}
 
-	// 验证视频URL不为空
 	if req.VideoURL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "视频链接不能为空"})
 		return
 	}
 
-	// 解析视频URL，提取BV号
 	bvid, err := bilibili.ParseVideoURL(req.VideoURL)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 获取B站Cookie配置（用于访问需要登录的接口）
 	cookie := getBilibiliCookie()
-
-	// 创建B站客户端并获取视频信息
 	client := bilibili.NewClient(cookie)
-	videoInfo, err := client.GetVideoInfo(bvid)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("获取视频信息失败: %v", err)})
+
+	type videoResult struct {
+		info *bilibili.VideoDetail
+		err  error
+	}
+	type commentsResult struct {
+		comments []string
+		err      error
+	}
+
+	videoCh := make(chan videoResult, 1)
+	commentsCh := make(chan commentsResult, 1)
+
+	go func() {
+		info, err := client.GetVideoInfo(bvid)
+		videoCh <- videoResult{info: info, err: err}
+	}()
+
+	go func() {
+		comments, err := client.SampleComments(bvid, 50)
+		commentsCh <- commentsResult{comments: comments, err: err}
+	}()
+
+	videoRes := <-videoCh
+	if videoRes.err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("获取视频信息失败: %v", videoRes.err)})
 		return
 	}
 
-	// 构建响应
+	commentsRes := <-commentsCh
+	videoInfo := videoRes.info
+
+	dimensions := getVideoDefaultDimensions()
+	if commentsRes.err == nil && len(commentsRes.comments) > 0 {
+		if dims, err := generateVideoDimensions(c.Request.Context(), videoInfo, commentsRes.comments); err == nil {
+			dimensions = dims
+		}
+	}
+
 	response := VideoParseResponse{
 		BVID:         videoInfo.BVID,
 		Title:        videoInfo.Title,
@@ -104,9 +126,42 @@ func HandleVideoParse(c *gin.Context) {
 		CommentCount: videoInfo.CommentCount,
 		PubDate:      videoInfo.PubDate,
 		Cover:        videoInfo.Cover,
+		Description:  videoInfo.Description,
+		Dimensions:   dimensions,
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// getVideoDefaultDimensions 获取视频解析的默认评价维度
+func getVideoDefaultDimensions() []ai.Dimension {
+	return []ai.Dimension{
+		{Name: "内容质量", Description: "视频内容的专业性和准确性"},
+		{Name: "制作水平", Description: "画面、音效等制作质量"},
+		{Name: "信息价值", Description: "对观众的帮助程度"},
+		{Name: "表达清晰", Description: "讲解是否容易理解"},
+		{Name: "互动体验", Description: "UP主与观众的互动"},
+		{Name: "整体评价", Description: "对视频的综合评价"},
+	}
+}
+
+// generateVideoDimensions 调用AI生成视频评价维度
+func generateVideoDimensions(ctx context.Context, videoInfo *bilibili.VideoDetail, comments []string) ([]ai.Dimension, error) {
+	settings, err := loadTaskSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	aiClient := ai.NewClient(ai.Config{
+		APIBase: settings.AIBaseURL,
+		APIKey:  settings.AIAPIKey,
+		Model:   settings.AIModel,
+	})
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return aiClient.GenerateDimensions(ctx, videoInfo.Title, videoInfo.Description, comments)
 }
 
 // HandleVideoAnalyze 处理视频评论分析

@@ -60,9 +60,9 @@ func TestGenerateReport(t *testing.T) {
 		t.Errorf("Expected scores for %d brands, got %d", len(brands), len(report.Scores))
 	}
 
-	// 验证小米的性能得分（应该是8.5和8.0的平均值）
+	// 验证小米的性能得分（报告层会保留1位小数）
 	xiaomiScores := report.Scores["小米"]
-	expectedPerf := (8.5 + 8.0) / 2
+	expectedPerf := 8.3
 	if xiaomiScores["性能"] != expectedPerf {
 		t.Errorf("Expected 小米 性能 score %.2f, got %.2f", expectedPerf, xiaomiScores["性能"])
 	}

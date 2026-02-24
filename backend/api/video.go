@@ -251,6 +251,8 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 }) {
 	// 确保任务结束时关闭SSE通道
 	defer sse.CloseTaskChannel(taskID)
+	taskCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
 
 	// 推送初始状态
 	sse.PushProgress(taskID, sse.StatusParsing, 0, 100, "正在解析视频链接...")
@@ -303,6 +305,11 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 		FetchReplies:        true,
 		RequestDelay:        200 * time.Millisecond,
 	})
+	scraper.SetProgressCallback(func(stage string, current, total int, message string) {
+		// 抓取阶段在整体任务中占 10%-40%
+		progress := 10 + (current * 30 / max(total, 1))
+		sse.PushProgress(taskID, sse.StatusScraping, progress, 100, message)
+	})
 
 	// 构建视频信息用于抓取
 	videos := []bilibili.VideoInfo{{
@@ -318,7 +325,7 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 		videoInfo.BVID: min(maxComments, videoInfo.CommentCount),
 	}
 
-	scrapeResult, err := scraper.ScrapeByVideos(context.Background(), videos, commentAllocation)
+	scrapeResult, err := scraper.ScrapeByVideos(taskCtx, videos, commentAllocation)
 	if err != nil {
 		updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, fmt.Sprintf("抓取评论失败: %v", err))
@@ -407,7 +414,7 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	}
 
 	// 执行AI分析
-	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(context.Background(), inputs, dimensions, 10)
+	analysisResults, err := aiClient.AnalyzeCommentsWithRateLimit(taskCtx, inputs, dimensions, 10)
 	if err != nil {
 		updateHistoryStatus(history.ID, models.StatusFailed)
 		sse.PushError(taskID, fmt.Sprintf("AI分析失败: %v", err))
@@ -447,7 +454,7 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	sse.PushProgress(taskID, sse.StatusGenerating, 90, 100, "正在生成AI购买建议...")
 
 	// 生成AI购买建议
-	aiRecommendation, err := generateAIRecommendation(context.Background(), aiClient, reportData)
+	aiRecommendation, err := generateAIRecommendation(taskCtx, aiClient, reportData)
 	if err == nil && aiRecommendation != "" {
 		reportData.Recommendation = aiRecommendation
 	}

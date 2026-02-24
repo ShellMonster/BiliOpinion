@@ -82,31 +82,31 @@ func TestDefaultMaxConcurrent(t *testing.T) {
 	client := NewClient(Config{
 		APIKey: "test-key",
 		Model:  "gpt-3.5-turbo",
-		// 不设置MaxConcurrent，应该使用默认值5
+		// 不设置MaxConcurrent，应该使用默认值10
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 尝试获取5个信号量（应该成功）
-	for i := 0; i < 5; i++ {
+	// 尝试获取10个信号量（应该成功）
+	for i := 0; i < 10; i++ {
 		if err := client.sem.Acquire(ctx, 1); err != nil {
 			t.Errorf("Should be able to acquire semaphore %d", i+1)
 		}
 	}
 
-	// 第6个应该阻塞
+	// 第11个应该阻塞
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel2()
 	err := client.sem.Acquire(ctx2, 1)
 
 	if err == nil {
-		t.Error("Should not be able to acquire 6th semaphore")
+		t.Error("Should not be able to acquire 11th semaphore")
 		client.sem.Release(1)
 	}
 
 	// 释放所有信号量
-	client.sem.Release(5)
+	client.sem.Release(10)
 }
 
 // TestHTTPClientTimeout 测试HTTP客户端超时设置

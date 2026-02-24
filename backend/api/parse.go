@@ -12,7 +12,7 @@ import (
 // ParseRequest 解析请求
 // 前端发送用户输入的需求描述（自由格式）
 type ParseRequest struct {
-	Requirement string `json:"requirement" binding:"required"` // 用户需求描述，必填字段
+	Requirement string `json:"requirement"` // 用户需求描述
 	// 为了向后兼容，同时支持旧的 category 字段
 	Category string `json:"category"` // 兼容旧版本，如果 requirement 为空则使用 category
 }

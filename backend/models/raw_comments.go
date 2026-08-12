@@ -10,7 +10,7 @@ type RawComment struct {
 	ID          uint      `gorm:"primaryKey"`     // 主键ID
 	HistoryID   uint      `gorm:"index;not null"` // 关联的分析历史ID（外键引用analysis_history表）
 	VideoID     string    `gorm:"index"`          // B站视频BV号（如：BV1xx411c7mD）
-	CommentID   string    `gorm:"uniqueIndex"`    // 评论唯一ID（B站的rpid）
+	CommentID   string    `gorm:"index"`          // 评论ID（B站 rpid，可跨任务重复）
 	Content     string    `gorm:"type:text"`      // 评论内容（完整文本）
 	Author      string    `gorm:"index"`          // 评论作者昵称
 	Likes       int       `gorm:"default:0"`      // 点赞数

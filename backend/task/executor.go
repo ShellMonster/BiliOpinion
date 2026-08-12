@@ -301,7 +301,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 		MinVideos:          settings.DiscoveryMinVideos,
 	}
 	analysisResults, err := e.analyzeComments(
-		ctx, taskID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement, discoveryCfg,
+		ctx, taskID, history.ID, aiClient, scrapeResult, req.Brands, req.Keywords, req.Dimensions, req.Requirement, discoveryCfg,
 	)
 	if err != nil {
 		e.updateHistoryStatus(history.ID, models.StatusFailed)
@@ -613,6 +613,7 @@ func (e *Executor) calculateProportionalAllocation(
 func (e *Executor) analyzeComments(
 	ctx context.Context,
 	taskID string,
+	historyID uint,
 	aiClient *ai.Client,
 	scrapeResult *bilibili.ScrapeResult,
 	brands []string,
@@ -647,6 +648,16 @@ func (e *Executor) analyzeComments(
 
 	if len(filteredComments) == 0 {
 		return nil, fmt.Errorf("过滤后没有有效评论")
+	}
+
+	videoByKey := make(map[string]string)
+	for _, c := range filteredComments {
+		if meta, ok := commentMetaByKey[buildCommentKey(c)]; ok {
+			videoByKey[fmt.Sprintf("%d", c.RPID)] = meta.VideoBVID
+		}
+	}
+	if err := comment.PersistForHistory(historyID, filteredComments, videoByKey); err != nil {
+		log.Printf("[Task %s] persist comments failed: %v", taskID, err)
 	}
 
 	// 3. 构建 AI 输入（按过滤后的优先级顺序）

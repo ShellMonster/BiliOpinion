@@ -162,8 +162,7 @@ func HandleDeleteHistory(c *gin.Context) {
 	})
 }
 
-// parseJSONArray 解析JSON数组字符串为字符串切片
-// 简化处理：如果解析失败，返回空切片
+// findHistoryByIDOrTaskID looks up by numeric primary key first, then task_id.
 func findHistoryByIDOrTaskID(idStr string) (models.AnalysisHistory, error) {
 	var history models.AnalysisHistory
 	if id, err := strconv.ParseUint(idStr, 10, 32); err == nil {
@@ -177,6 +176,8 @@ func findHistoryByIDOrTaskID(idStr string) (models.AnalysisHistory, error) {
 	return history, nil
 }
 
+// parseJSONArray 解析JSON数组字符串为字符串切片
+// 简化处理：如果解析失败，返回空切片
 func parseJSONArray(jsonStr string) []string {
 	if jsonStr == "" || jsonStr == "[]" {
 		return []string{}

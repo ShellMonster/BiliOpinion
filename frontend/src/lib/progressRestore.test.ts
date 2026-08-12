@@ -23,10 +23,17 @@ describe('resolveProgressRestore', () => {
     })
   })
 
-  it('does not treat completed-without-report as a report navigation', () => {
-    expect(resolveProgressRestore({ status: 'completed', reportId: 0 })).toEqual({
-      kind: 'sse',
-    })
+  it('treats completed-without-report as an error, not a hang on SSE', () => {
+    const result = resolveProgressRestore({ status: 'completed', reportId: 0 })
+    expect(result.kind).toBe('error')
+  })
+
+  it('uses a fallback message when failed has no progressMsg', () => {
+    const result = resolveProgressRestore({ status: 'failed' })
+    expect(result.kind).toBe('error')
+    if (result.kind === 'error') {
+      expect(result.message.length).toBeGreaterThan(0)
+    }
   })
 })
 

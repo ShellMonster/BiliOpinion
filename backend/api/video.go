@@ -254,13 +254,29 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	taskCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	placeholder := &bilibili.VideoDetail{Title: videoURL}
+	history, histErr := createVideoAnalyzeHistory(taskID, placeholder, maxComments)
+	if histErr != nil {
+		log.Printf("[Task %s] Failed to create history early: %v", taskID, histErr)
+	}
+
+	fail := func(msg string) {
+		sse.PushError(taskID, msg)
+		if history != nil {
+			database.DB.Model(history).Updates(map[string]interface{}{
+				"status":       models.StatusFailed,
+				"progress_msg": msg,
+			})
+		}
+	}
+
 	// 推送初始状态
 	sse.PushProgress(taskID, sse.StatusParsing, 0, 100, "正在解析视频链接...")
 
 	// 步骤1：解析视频URL
 	bvid, err := bilibili.ParseVideoURL(videoURL)
 	if err != nil {
-		sse.PushError(taskID, fmt.Sprintf("解析视频链接失败: %v", err))
+		fail(fmt.Sprintf("解析视频链接失败: %v", err))
 		return
 	}
 
@@ -270,7 +286,7 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	// 步骤2：获取配置和创建客户端
 	settings, err := loadTaskSettings()
 	if err != nil {
-		sse.PushError(taskID, err.Error())
+		fail(err.Error())
 		return
 	}
 
@@ -280,17 +296,20 @@ func executeVideoAnalyzeTask(taskID, videoURL string, maxComments int, requestDi
 	// 获取视频详细信息
 	videoInfo, err := biliClient.GetVideoInfo(bvid)
 	if err != nil {
-		sse.PushError(taskID, fmt.Sprintf("获取视频信息失败: %v", err))
+		fail(fmt.Sprintf("获取视频信息失败: %v", err))
 		return
 	}
 
 	log.Printf("[Task %s] Video info: %s, comments: %d", taskID, videoInfo.Title, videoInfo.CommentCount)
 
-	// 步骤3：创建历史记录
-	history, err := createVideoAnalyzeHistory(taskID, videoInfo, maxComments)
-	if err != nil {
-		sse.PushError(taskID, fmt.Sprintf("创建任务记录失败: %v", err))
-		return
+	if history != nil {
+		database.DB.Model(history).Update("category", videoInfo.Title)
+	} else {
+		history, err = createVideoAnalyzeHistory(taskID, videoInfo, maxComments)
+		if err != nil {
+			fail(fmt.Sprintf("创建任务记录失败: %v", err))
+			return
+		}
 	}
 
 	// 推送进度：正在抓取评论

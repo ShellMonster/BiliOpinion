@@ -13,8 +13,11 @@ export function resolveProgressRestore(snapshot: HistorySnapshot | null): Restor
   if (!snapshot) {
     return { kind: 'sse' }
   }
-  if (snapshot.status === 'completed' && snapshot.reportId && snapshot.reportId > 0) {
-    return { kind: 'report', reportId: snapshot.reportId }
+  if (snapshot.status === 'completed') {
+    if (snapshot.reportId && snapshot.reportId > 0) {
+      return { kind: 'report', reportId: snapshot.reportId }
+    }
+    return { kind: 'error', message: snapshot.progressMsg || '任务已完成但没有报告' }
   }
   if (snapshot.status === 'failed') {
     return {

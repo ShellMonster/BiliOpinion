@@ -26,6 +26,20 @@ describe('confirmNavigationTarget', () => {
       href: '/progress/abc-123?title=%E5%90%B8%E5%B0%98%E5%99%A8',
     })
   })
+
+  it('rejects blank task_id', () => {
+    expect(confirmNavigationTarget(true, { task_id: '   ' }, 'x').kind).toBe('error')
+    expect(confirmNavigationTarget(true, { task_id: '' }, 'x').kind).toBe('error')
+  })
+
+  it('includes video mode in the href', () => {
+    const result = confirmNavigationTarget(true, { task_id: 'vid-1' }, '评测', 'video')
+    expect(result.kind).toBe('progress')
+    if (result.kind === 'progress') {
+      expect(result.href).toContain('mode=video')
+      expect(result.href).not.toContain('搜索')
+    }
+  })
 })
 
 describe('parseOutcomeFromResponse', () => {
@@ -35,6 +49,16 @@ describe('parseOutcomeFromResponse', () => {
     if (result.kind === 'error') {
       expect(result.message).toContain('AI API密钥未配置')
     }
+  })
+
+  it('accepts a successful parse with brands', () => {
+    const result = parseOutcomeFromResponse(true, { brands: ['戴森'], product_type: '吸尘器' })
+    expect(result.kind).toBe('ok')
+  })
+
+  it('rejects empty brands and 200+error payloads', () => {
+    expect(parseOutcomeFromResponse(true, { brands: [] }).kind).toBe('error')
+    expect(parseOutcomeFromResponse(true, { error: '模型超时', brands: ['戴森'] }).kind).toBe('error')
   })
 })
 

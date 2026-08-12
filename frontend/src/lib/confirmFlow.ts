@@ -6,6 +6,7 @@ export function confirmNavigationTarget(
   responseOk: boolean,
   payload: { task_id?: unknown; error?: unknown },
   title: string,
+  mode: 'product' | 'video' = 'product',
 ): ConfirmNav {
   if (!responseOk) {
     const message = typeof payload.error === 'string' && payload.error ? payload.error : '创建任务失败'
@@ -15,8 +16,15 @@ export function confirmNavigationTarget(
   if (!taskId) {
     return { kind: 'error', message: '服务器未返回任务ID' }
   }
-  const qs = title ? `?title=${encodeURIComponent(title)}` : ''
-  return { kind: 'progress', href: `/progress/${taskId}${qs}` }
+  const params = new URLSearchParams()
+  if (title) {
+    params.set('title', title)
+  }
+  if (mode === 'video') {
+    params.set('mode', 'video')
+  }
+  const qs = params.toString()
+  return { kind: 'progress', href: qs ? `/progress/${taskId}?${qs}` : `/progress/${taskId}` }
 }
 
 export type ParseOutcome =

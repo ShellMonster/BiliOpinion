@@ -27,7 +27,7 @@ const Progress = () => {
   const title = searchParams.get('title') || '分析任务'
   const mode = searchParams.get('mode') === 'video' ? 'video' : 'product'
   const eventSourceRef = useRef<EventSource | null>(null)
-  const completedRef = useRef(false)
+  const terminalRef = useRef(false)
 
   const [progress, setProgress] = useState(0)
   const [message, setMessage] = useState('正在连接服务器...')
@@ -53,6 +53,7 @@ const Progress = () => {
       eventSourceRef.current = eventSource
 
       eventSource.onmessage = (event) => {
+        if (cancelled) return
         try {
           const data: SSEData = JSON.parse(event.data)
 
@@ -67,15 +68,18 @@ const Progress = () => {
           updateStepsFromStatus(data.status, data.progress?.current || 0)
 
           if (data.status === 'completed') {
-            completedRef.current = true
+            terminalRef.current = true
             const reportId = data.progress?.stage
             eventSource.close()
             if (reportId) {
               navigate(`/report/${reportId}`)
+            } else {
+              setError('任务已完成但没有报告')
             }
           }
 
           if (data.status === 'error') {
+            terminalRef.current = true
             setError(data.error || data.message || '任务执行失败')
             eventSource.close()
           }
@@ -85,7 +89,7 @@ const Progress = () => {
       }
 
       eventSource.onerror = () => {
-        if (completedRef.current) {
+        if (terminalRef.current || cancelled) {
           eventSource.close()
           return
         }

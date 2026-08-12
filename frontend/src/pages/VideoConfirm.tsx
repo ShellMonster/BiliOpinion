@@ -47,6 +47,7 @@ const VideoConfirm = () => {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [submitError, setSubmitError] = useState('')
   const [videoInfo, setVideoInfo] = useState<VideoParseResponse | null>(null)
   const [dimensions, setDimensions] = useState<Dimension[]>([])
   const [dimensionsLoading, setDimensionsLoading] = useState(true)
@@ -91,23 +92,23 @@ const VideoConfirm = () => {
   const handleAnalyze = async () => {
     if (!videoUrl || !videoInfo || !beginSubmit(submitting)) return
     setSubmitting(true)
+    setSubmitError('')
     try {
       const result = await analyzeVideo(
         videoUrl, 
         maxComments,
         dimensions.length > 0 ? dimensions : undefined
       )
-      const nav = confirmNavigationTarget(true, result, videoInfo.title)
+      const nav = confirmNavigationTarget(true, result, videoInfo.title, 'video')
       if (nav.kind === 'error') {
-        setError(nav.message)
+        setSubmitError(nav.message)
         setSubmitting(false)
         return
       }
-      const href = nav.href.includes('?') ? `${nav.href}&mode=video` : `${nav.href}?mode=video`
-      navigate(href)
+      navigate(nav.href)
     } catch (err) {
       console.error('Failed to start analysis:', err)
-      setError('启动分析失败，请稍后重试')
+      setSubmitError('启动分析失败，请稍后重试')
       setSubmitting(false)
     }
   }
@@ -279,6 +280,12 @@ const VideoConfirm = () => {
             </div>
           )}
         </div>
+
+        {submitError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        )}
 
         {/* 操作按钮 */}
         <div className="flex gap-4">

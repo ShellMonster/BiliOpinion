@@ -142,12 +142,12 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `frontend/e2e/*`, frontend unit test runner if added in earlier PRs.
 
-- [ ] PR6 merged
+- [x] PR6 merged
 
 ---
 
 ## Final
 
-- [ ] All five parent acceptance criteria hold on `main`
-- [ ] This file’s PR1–PR6 boxes are checked
-- [ ] Review notes exist under the goal scratch dir as `pr-N-reviews.md`
+- [x] All five parent acceptance criteria hold on `main`
+- [x] This file’s PR1–PR6 boxes are checked
+- [x] Review notes exist under the goal scratch dir as `pr-N-reviews.md`

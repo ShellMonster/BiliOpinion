@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { confirmNavigationTarget, parseOutcomeFromResponse } from '../lib/confirmFlow'
 
 interface ParseResponse {
   understanding: string
@@ -29,6 +30,7 @@ const Confirm = () => {
   const [minCommentsPerVideo, setMinCommentsPerVideo] = useState(20)
   const [maxCommentsPerVideo, setMaxCommentsPerVideo] = useState(200)
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!requirement) {
@@ -39,15 +41,23 @@ const Confirm = () => {
     const fetchData = async () => {
       try {
         setLoading(true)
+        setError(null)
         const response = await fetch('http://localhost:8080/api/parse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ requirement })
         })
         const result = await response.json()
-        setData(result)
-      } catch (error) {
-        console.error('Failed to parse requirement:', error)
+        const outcome = parseOutcomeFromResponse(response.ok, result)
+        if (outcome.kind === 'error') {
+          setError(outcome.message)
+          setData(null)
+          return
+        }
+        setData(outcome.data as unknown as ParseResponse)
+      } catch {
+        setError('解析需求失败，请检查设置中的 AI 配置')
+        setData(null)
       } finally {
         setLoading(false)
       }
@@ -78,9 +88,15 @@ const Confirm = () => {
         })
       })
       const result = await response.json()
-      navigate(`/progress/${result.task_id}?title=${encodeURIComponent(data.product_type)}`)
-    } catch (error) {
-      console.error('Failed to confirm:', error)
+      const nav = confirmNavigationTarget(response.ok, result, data.product_type)
+      if (nav.kind === 'error') {
+        setError(nav.message)
+        setSubmitting(false)
+        return
+      }
+      navigate(nav.href)
+    } catch {
+      setError('创建任务失败，请稍后重试')
       setSubmitting(false)
     }
   }
@@ -99,7 +115,7 @@ const Confirm = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <h2 className="text-2xl font-semibold text-red-600">无法获取分析数据</h2>
-        <p className="text-gray-500 mt-2">请返回首页重新提交需求</p>
+        <p className="text-gray-500 mt-2">{error || '请返回首页重新提交需求'}</p>
         <button 
           onClick={() => navigate('/')}
           className="mt-6 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
@@ -291,6 +307,12 @@ const Confirm = () => {
                 </div>
             </div>
         </div>
+
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {/* Confirm Button */}
         <button

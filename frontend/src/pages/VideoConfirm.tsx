@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { parseVideo, analyzeVideo, getDimensions, type VideoParseResponse, type Dimension } from '../api/video'
+import { beginSubmit, confirmNavigationTarget } from '../lib/confirmFlow'
 
 
 
@@ -88,15 +89,22 @@ const VideoConfirm = () => {
   }, [videoUrl])
 
   const handleAnalyze = async () => {
-    if (!videoUrl || !videoInfo || submitting) return
+    if (!videoUrl || !videoInfo || !beginSubmit(submitting)) return
+    setSubmitting(true)
     try {
-      // 传递维度到 API，如果维度为空则不传递（使用后端默认维度）
       const result = await analyzeVideo(
         videoUrl, 
         maxComments,
         dimensions.length > 0 ? dimensions : undefined
       )
-      navigate(`/progress/${result.task_id}?title=${encodeURIComponent(videoInfo.title)}`)
+      const nav = confirmNavigationTarget(true, result, videoInfo.title)
+      if (nav.kind === 'error') {
+        setError(nav.message)
+        setSubmitting(false)
+        return
+      }
+      const href = nav.href.includes('?') ? `${nav.href}&mode=video` : `${nav.href}?mode=video`
+      navigate(href)
     } catch (err) {
       console.error('Failed to start analysis:', err)
       setError('启动分析失败，请稍后重试')

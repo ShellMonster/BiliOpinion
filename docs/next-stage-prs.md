@@ -73,7 +73,7 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `frontend/src/pages/Progress.tsx`, `Confirm.tsx`, `VideoConfirm.tsx`, `Settings.tsx` / `SettingsModal.tsx`, `hooks/useSSE.ts`, backend history lookup if needed.
 
-- [ ] PR2 merged
+- [x] PR2 merged
 
 ---
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { BrandRanking, BrandAnalysis } from '../../types/report';
+import { scoreToneTextClass } from '../../lib/scoreTone';
 
 interface BrandCardProps {
   ranking: BrandRanking;
@@ -18,12 +19,7 @@ interface BrandCardProps {
  */
 export const BrandCard: React.FC<BrandCardProps> = ({ ranking, analysis, onClick }) => {
   // 根据分数获取颜色类名
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-emerald-500';
-    if (score >= 80) return 'text-blue-500';
-    if (score >= 70) return 'text-amber-500';
-    return 'text-rose-500';
-  };
+  const getScoreColor = (score: number) => scoreToneTextClass(score);
 
   // 根据排名获取背景样式
   const getRankStyle = (rank: number) => {

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { ReportData } from '../../../types/report';
+import { RADAR_SCORE_MAX } from '../../../lib/reportView';
 
 interface BrandRadarChartProps {
   data: ReportData;
@@ -29,7 +30,7 @@ export const BrandRadarChart: React.FC<BrandRadarChartProps> = ({ data }) => {
     radar: {
       indicator: data.dimensions.map(dim => ({
         name: dim.name,
-        max: 100
+        max: RADAR_SCORE_MAX
       })),
       splitNumber: 4,
       radius: '65%', // 减小雷达图半径，给外部标签留更多空间
@@ -68,7 +69,7 @@ export const BrandRadarChart: React.FC<BrandRadarChartProps> = ({ data }) => {
       type: 'radar',
       data: data.brands.slice(0, 3).map((brand, index) => ({
         value: data.dimensions.map(dim => 
-          data.scores[brand]?.[dim.name] ? data.scores[brand][dim.name] * 10 : 0
+          data.scores[brand]?.[dim.name] ? data.scores[brand][dim.name] : 0
         ),
         name: brand,
         lineStyle: {

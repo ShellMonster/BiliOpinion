@@ -62,7 +62,7 @@ export const ModelAnalysis: React.FC<ModelAnalysisProps> = ({ modelRankings, dim
       radar: {
         indicator: dimensions.map(dim => ({
           name: dim.name,
-          max: 100
+          max: 10
         })),
         radius: '65%',
         center: ['50%', '50%'],

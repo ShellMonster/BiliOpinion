@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import Modal from '../common/Modal';
 import type { BrandRanking, BrandAnalysis, TypicalComment, Dimension } from '../../types/report';
+import { scoreToneBadgeClass, scoreToneBarClass } from '../../lib/scoreTone';
 
 interface BrandDetailModalProps {
   isOpen: boolean;
@@ -32,20 +33,9 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
   dimensions = []
 }) => {
   // 综合得分颜色辅助函数
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-    if (score >= 80) return 'text-blue-600 bg-blue-50 border-blue-100';
-    if (score >= 70) return 'text-amber-600 bg-amber-50 border-amber-100';
-    return 'text-rose-600 bg-rose-50 border-rose-100';
-  };
+  const getScoreColor = (score: number) => scoreToneBadgeClass(score);
 
-  // 进度条颜色
-  const getProgressColor = (score: number) => {
-    if (score >= 9) return 'bg-emerald-500';
-    if (score >= 8) return 'bg-blue-500';
-    if (score >= 7) return 'bg-amber-500';
-    return 'bg-rose-500';
-  };
+  const getProgressColor = (score: number) => scoreToneBarClass(score);
 
   // 匹配维度描述
   const getDimensionDesc = (dimName: string) => {

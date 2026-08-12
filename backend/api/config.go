@@ -17,13 +17,18 @@ func HandleGetConfig(c *gin.Context) {
 		return setting.Value
 	}
 
+	apiKey := getSettingValue(models.SettingKeyAIAPIKey)
+	cookie := getSettingValue(models.SettingKeyBilibiliCookie)
+
 	c.JSON(http.StatusOK, gin.H{
 		"ai_base_url":            getSettingValue(models.SettingKeyAIAPIBase),
-		"ai_api_key":             getSettingValue(models.SettingKeyAIAPIKey),
+		"ai_api_key":             MaskSecret(apiKey),
 		"ai_model":               getSettingValue(models.SettingKeyAIModel),
-		"bilibili_cookie":        getSettingValue(models.SettingKeyBilibiliCookie),
+		"bilibili_cookie":        MaskSecret(cookie),
 		"scrape_max_concurrency": getSettingValue(models.SettingKeyScrapeMaxConcurrency),
 		"ai_max_concurrency":     getSettingValue(models.SettingKeyAIMaxConcurrency),
+		"ai_api_key_set":         apiKey != "",
+		"bilibili_cookie_set":    cookie != "",
 	})
 }
 
@@ -51,6 +56,23 @@ func HandleSaveConfig(c *gin.Context) {
 		}
 		setting.Value = value
 		return database.DB.Save(&setting).Error
+	}
+
+	existingKey := ""
+	existingCookie := ""
+	var existing models.Settings
+	if err := database.DB.Where("key = ?", models.SettingKeyAIAPIKey).First(&existing).Error; err == nil {
+		existingKey = existing.Value
+	}
+	if err := database.DB.Where("key = ?", models.SettingKeyBilibiliCookie).First(&existing).Error; err == nil {
+		existingCookie = existing.Value
+	}
+
+	if shouldPreserveSecret(req.AIAPIKey, existingKey) {
+		req.AIAPIKey = existingKey
+	}
+	if shouldPreserveSecret(req.BilibiliCookie, existingCookie) {
+		req.BilibiliCookie = existingCookie
 	}
 
 	if err := saveOrUpdate(models.SettingKeyAIAPIBase, req.AIBaseURL); err != nil {

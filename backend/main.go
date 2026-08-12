@@ -79,8 +79,8 @@ func main() {
 	}
 
 	// 启动服务器
-	log.Println("✅ Server is running on http://localhost:8080")
-	if err := r.Run(":8080"); err != nil {
+	log.Printf("✅ Server is running on http://%s", api.ListenAddr)
+	if err := r.Run(api.ListenAddr); err != nil {
 		log.Fatalf("❌ Failed to start server: %v", err)
 	}
 }

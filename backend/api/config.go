@@ -3,10 +3,24 @@ package api
 import (
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/models"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+func loadSettingValue(key string) (string, error) {
+	var setting models.Settings
+	err := database.DB.Where("key = ?", key).First(&setting).Error
+	if err == nil {
+		return setting.Value, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return "", err
+}
 
 func HandleGetConfig(c *gin.Context) {
 	getSettingValue := func(key string) string {
@@ -17,13 +31,18 @@ func HandleGetConfig(c *gin.Context) {
 		return setting.Value
 	}
 
+	apiKey := getSettingValue(models.SettingKeyAIAPIKey)
+	cookie := getSettingValue(models.SettingKeyBilibiliCookie)
+
 	c.JSON(http.StatusOK, gin.H{
 		"ai_base_url":            getSettingValue(models.SettingKeyAIAPIBase),
-		"ai_api_key":             getSettingValue(models.SettingKeyAIAPIKey),
+		"ai_api_key":             MaskSecret(apiKey),
 		"ai_model":               getSettingValue(models.SettingKeyAIModel),
-		"bilibili_cookie":        getSettingValue(models.SettingKeyBilibiliCookie),
+		"bilibili_cookie":        MaskSecret(cookie),
 		"scrape_max_concurrency": getSettingValue(models.SettingKeyScrapeMaxConcurrency),
 		"ai_max_concurrency":     getSettingValue(models.SettingKeyAIMaxConcurrency),
+		"ai_api_key_set":         apiKey != "",
+		"bilibili_cookie_set":    cookie != "",
 	})
 }
 
@@ -51,6 +70,24 @@ func HandleSaveConfig(c *gin.Context) {
 		}
 		setting.Value = value
 		return database.DB.Save(&setting).Error
+	}
+
+	existingKey, err := loadSettingValue(models.SettingKeyAIAPIKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load config"})
+		return
+	}
+	existingCookie, err := loadSettingValue(models.SettingKeyBilibiliCookie)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load config"})
+		return
+	}
+
+	if shouldPreserveSecret(req.AIAPIKey, existingKey) {
+		req.AIAPIKey = existingKey
+	}
+	if shouldPreserveSecret(req.BilibiliCookie, existingCookie) {
+		req.BilibiliCookie = existingCookie
 	}
 
 	if err := saveOrUpdate(models.SettingKeyAIAPIBase, req.AIBaseURL); err != nil {

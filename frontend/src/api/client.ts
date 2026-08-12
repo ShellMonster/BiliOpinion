@@ -5,8 +5,8 @@ class APIClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: 'http://localhost:8080/api',
-      timeout: 30000,
+      baseURL: '/api',
+      timeout: 120000,
       headers: {
         'Content-Type': 'application/json'
       }
@@ -27,9 +27,23 @@ class APIClient {
     )
   }
 
+  async get<T>(url: string): Promise<T> {
+    const response = await this.client.get<T>(url)
+    return response.data
+  }
+
   async post<T>(url: string, data?: Record<string, unknown>): Promise<T> {
     const response = await this.client.post<T>(url, data)
     return response.data
+  }
+
+  async delete<T>(url: string): Promise<T> {
+    const response = await this.client.delete<T>(url)
+    return response.data
+  }
+
+  raw(path: string): string {
+    return `/api${path}`
   }
 }
 

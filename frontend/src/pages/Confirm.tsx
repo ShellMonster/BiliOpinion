@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { confirmNavigationTarget, parseOutcomeFromResponse } from '../lib/confirmFlow'
+import { addListItem, buildConfirmPayload, removeListItem } from '../lib/confirmPlan'
+import { apiClient } from '../api/client'
+import axios from 'axios'
 
 interface ParseResponse {
   understanding: string
@@ -31,6 +34,9 @@ const Confirm = () => {
   const [maxCommentsPerVideo, setMaxCommentsPerVideo] = useState(200)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [newBrand, setNewBrand] = useState('')
+  const [newKeyword, setNewKeyword] = useState('')
+  const [newDimName, setNewDimName] = useState('')
 
   useEffect(() => {
     if (!requirement) {
@@ -42,21 +48,20 @@ const Confirm = () => {
       try {
         setLoading(true)
         setError(null)
-        const response = await fetch('http://localhost:8080/api/parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requirement })
-        })
-        const result = await response.json()
-        const outcome = parseOutcomeFromResponse(response.ok, result)
+        const result = await apiClient.post<ParseResponse>('/parse', { requirement })
+        const outcome = parseOutcomeFromResponse(true, result as unknown as Record<string, unknown>)
         if (outcome.kind === 'error') {
           setError(outcome.message)
           setData(null)
           return
         }
         setData(outcome.data as unknown as ParseResponse)
-      } catch {
-        setError('解析需求失败，请检查设置中的 AI 配置')
+      } catch (err) {
+        const apiError = axios.isAxiosError(err) ? err.response?.data : null
+        const message = apiError && typeof apiError === 'object' && 'error' in apiError && typeof apiError.error === 'string'
+          ? apiError.error
+          : '解析需求失败，请检查设置中的 AI 配置'
+        setError(message)
         setData(null)
       } finally {
         setLoading(false)
@@ -71,32 +76,35 @@ const Confirm = () => {
     
     setSubmitting(true)
     try {
-      const response = await fetch('http://localhost:8080/api/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await apiClient.post<{ task_id?: string; error?: string }>('/confirm', buildConfirmPayload({
           requirement: requirement,
+          budget: data.budget,
+          scenario: data.scenario,
+          special_needs: data.special_needs,
           brands: data.brands,
           dimensions: data.dimensions,
           keywords: data.keywords,
+        }, {
           video_date_range_months: videoDateRangeMonths,
           min_video_duration: minVideoDuration,
           max_comments: maxComments,
           min_video_comments: minVideoComments,
           min_comments_per_video: minCommentsPerVideo,
           max_comments_per_video_v2: maxCommentsPerVideo
-        })
-      })
-      const result = await response.json()
-      const nav = confirmNavigationTarget(response.ok, result, data.product_type)
+        }))
+      const nav = confirmNavigationTarget(true, result, data.product_type)
       if (nav.kind === 'error') {
         setError(nav.message)
         setSubmitting(false)
         return
       }
       navigate(nav.href)
-    } catch {
-      setError('创建任务失败，请稍后重试')
+    } catch (err) {
+      const apiError = axios.isAxiosError(err) ? err.response?.data : null
+      const message = apiError && typeof apiError === 'object' && 'error' in apiError && typeof apiError.error === 'string'
+        ? apiError.error
+        : '创建任务失败，请稍后重试'
+      setError(message)
       setSubmitting(false)
     }
   }
@@ -268,42 +276,72 @@ const Confirm = () => {
               </div>
             </div>
 
-            {/* Brand Tags */}
+            {(data.special_needs || []).length > 0 && (
+              <p className="text-sm text-slate-600">特殊需求：{(data.special_needs || []).join('、')}</p>
+            )}
+
             <div>
                 <h4 className="text-sm font-bold text-gray-600 mb-4 flex items-center gap-2">
                     <span>🏷️</span> 将分析这些品牌
                 </h4>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 mb-3">
                 {(data.brands || []).map(brand => (
-                    <span key={brand} className="px-4 py-2 bg-white/50 backdrop-blur-sm rounded-xl text-sm font-medium text-slate-700 border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow cursor-default">
-                    {brand}
-                    </span>
+                    <button
+                      type="button"
+                      key={brand}
+                      onClick={() => setData({ ...data, brands: removeListItem(data.brands, brand) })}
+                      className="px-4 py-2 bg-white/50 rounded-xl text-sm font-medium text-slate-700 border border-slate-200/60"
+                    >
+                    {brand} ×
+                    </button>
                 ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={newBrand} onChange={(e) => setNewBrand(e.target.value)} placeholder="添加品牌" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                  <button type="button" className="px-3 py-2 bg-gray-800 text-white rounded-lg text-sm" onClick={() => { setData({ ...data, brands: addListItem(data.brands, newBrand) }); setNewBrand('') }}>添加</button>
                 </div>
             </div>
 
-            {/* Dimension Cards */}
             <div>
                 <h4 className="text-sm font-bold text-gray-600 mb-4 flex items-center gap-2">
                     <span>📊</span> 评价维度
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-3">
                 {(data.dimensions || []).map(dim => (
-                    <div key={dim.name} className="bg-white/40 backdrop-blur-sm rounded-xl p-4 border border-white/40 hover:bg-white/60 transition-colors">
-                    <h5 className="font-bold text-slate-800 mb-1">{dim.name}</h5>
+                    <div key={dim.name} className="bg-white/40 rounded-xl p-4 border border-white/40">
+                    <div className="flex justify-between gap-2">
+                      <h5 className="font-bold text-slate-800 mb-1">{dim.name}</h5>
+                      <button type="button" className="text-xs text-red-500" onClick={() => setData({ ...data, dimensions: data.dimensions.filter((d) => d.name !== dim.name) })}>删除</button>
+                    </div>
                     <p className="text-xs text-slate-500 leading-relaxed">{dim.description}</p>
                     </div>
                 ))}
                 </div>
+                <div className="flex gap-2">
+                  <input value={newDimName} onChange={(e) => setNewDimName(e.target.value)} placeholder="添加维度" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                  <button type="button" className="px-3 py-2 bg-gray-800 text-white rounded-lg text-sm" onClick={() => {
+                    const name = newDimName.trim()
+                    if (!name || data.dimensions.some((d) => d.name === name)) return
+                    setData({ ...data, dimensions: [...data.dimensions, { name, description: name }] })
+                    setNewDimName('')
+                  }}>添加</button>
+                </div>
             </div>
 
-            {/* Keywords */}
             <div>
                 <h4 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
                     <span>🔍</span> 搜索关键词
                 </h4>
-                <div className="bg-gray-50/50 rounded-lg p-3 text-sm text-slate-600 font-mono border border-gray-100">
-                    {(data.keywords || []).join(' | ')}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {(data.keywords || []).map((word) => (
+                    <button type="button" key={word} className="px-3 py-1 bg-gray-50 rounded-lg text-sm" onClick={() => setData({ ...data, keywords: removeListItem(data.keywords, word) })}>
+                      {word} ×
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} placeholder="添加关键词" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                  <button type="button" className="px-3 py-2 bg-gray-800 text-white rounded-lg text-sm" onClick={() => { setData({ ...data, keywords: addListItem(data.keywords, newKeyword) }); setNewKeyword('') }}>添加</button>
                 </div>
             </div>
         </div>
@@ -317,7 +355,7 @@ const Confirm = () => {
         {/* Confirm Button */}
         <button
           onClick={handleConfirm}
-          disabled={submitting}
+          disabled={submitting || data.brands.length === 0 || data.dimensions.length === 0 || data.keywords.length === 0}
           className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
           {submitting ? '⏳ 正在创建任务...' : '✓ 确认开始分析'}

@@ -92,7 +92,7 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `frontend/src/components/Report/**`, `frontend/src/pages/Report.tsx`.
 
-- [ ] PR3 merged
+- [x] PR3 merged
 
 ---
 

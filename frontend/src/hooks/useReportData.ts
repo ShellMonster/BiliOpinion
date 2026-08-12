@@ -104,7 +104,7 @@ export function useReportData() {
       try {
         setLoading(true)
         // 获取报告详情
-        const response = await fetch(`http://localhost:8080/api/report/${id}`)
+        const response = await fetch(`/api/report/${id}`)
         if (!response.ok) {
           throw new Error('报告不存在')
         }
@@ -114,7 +114,7 @@ export function useReportData() {
         // 如果有关联的历史记录，获取历史记录信息（主要是品牌列表）
         if (data.history_id) {
           try {
-            const historyRes = await fetch(`http://localhost:8080/api/history/${data.history_id}`)
+            const historyRes = await fetch(`/api/history/${data.history_id}`)
             if (historyRes.ok) {
               const historyData = await historyRes.json()
               setSpecifiedBrands(historyData.brands || [])

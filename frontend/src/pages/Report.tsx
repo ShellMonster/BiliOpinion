@@ -300,7 +300,7 @@ const Report = () => {
   const handleExportPDF = async () => {
     if (!id) return; setExporting(true)
     try {
-      const response = await fetch(`http://localhost:8080/api/report/${id}/pdf`)
+      const response = await fetch(`/api/report/${id}/pdf`)
       if (!response.ok) throw new Error('导出失败')
       const blob = await response.blob(), url = window.URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href = url; a.download = `报告_${report?.data.category}_${id}.pdf`

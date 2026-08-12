@@ -49,7 +49,7 @@ const Progress = () => {
     let cancelled = false
 
     const connectSSE = () => {
-      const eventSource = new EventSource(`http://localhost:8080/api/sse?task_id=${id}`)
+      const eventSource = new EventSource(`/api/sse?task_id=${id}`)
       eventSourceRef.current = eventSource
 
       eventSource.onmessage = (event) => {
@@ -100,7 +100,7 @@ const Progress = () => {
 
     const restore = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/history/${id}`)
+        const response = await fetch(`/api/history/${id}`)
         if (response.ok) {
           const snapshot = await response.json()
           const action = resolveProgressRestore({

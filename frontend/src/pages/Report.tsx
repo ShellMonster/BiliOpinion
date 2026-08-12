@@ -20,6 +20,7 @@ import { CompetitorCompare } from '../components/Report/CompetitorCompare'
 import { DecisionTree } from '../components/Report/DecisionTree'
 import { VideoSourceList } from '../components/Report/VideoSourceList'
 import type { SentimentStats, ModelRanking } from '../types/report'
+import { filterReportByDimensions, overviewRecommendation } from '../lib/reportView'
 
 type TabType = 'overview' | 'charts' | 'summary' | 'sources'
 
@@ -49,7 +50,7 @@ const Report = () => {
     setAllTabsExporting(true)
 
     try {
-      // 临时显示所有tab内容，以便ECharts能够渲染
+      await new Promise((resolve) => setTimeout(resolve, 50))
       const overviewContent = document.getElementById('overview-tab-content')
       const chartsContent = document.getElementById('charts-tab-content')
       const summaryContent = document.getElementById('summary-tab-content')
@@ -307,7 +308,9 @@ const Report = () => {
     { key: 'sources', label: '数据来源' }
   ]
   const currentDims = selectedDims.length ? selectedDims : data.dimensions.map(d => d.name)
-  
+  const chartData = filterReportByDimensions(data, currentDims)
+  const recommendation = overviewRecommendation(data)
+
   // 过滤后的数据
   const filteredRankings = data.rankings?.filter(r => {
     if (hideUnknown && r.brand === '未知') return false
@@ -433,6 +436,13 @@ const Report = () => {
         </div>
 
         <div className={activeTab === 'overview' ? 'space-y-6' : 'hidden'} id="overview-tab-content">
+            {recommendation && (
+              <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5">
+                <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">推荐</p>
+                <h2 className="text-2xl font-semibold text-gray-900">{recommendation.brand}</h2>
+                <p className="text-gray-600 mt-2 leading-relaxed">{recommendation.reason}</p>
+              </div>
+            )}
             <KeyStatsCards stats={data.stats || { total_videos: 0, total_comments: 0, comments_by_brand: {}}} brandCount={data.brands.length} />
             
             {/* 过滤开关 */}
@@ -544,24 +554,28 @@ const Report = () => {
             )}
           </div>
 
+        {(activeTab === 'charts' || allTabsExporting) && (
         <div className={activeTab === 'charts' ? 'space-y-6' : 'hidden'} id="charts-tab-content">
              <DimensionFilter dimensions={data.dimensions} selectedDimensions={currentDims} onChange={setSelectedDims} />
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <BrandRadarChart data={data} />
-               <BrandScoreChart data={data} />
-               <BrandHeatmap data={data} />
+               <BrandRadarChart data={chartData} />
+               <BrandScoreChart data={chartData} />
+               <BrandHeatmap data={chartData} />
                <SentimentPie data={totalSentiment} title="整体情感分布" />
                <KeywordCloud data={data.keyword_frequency || []} />
              </div>
-             <BrandNetwork data={data} />
-             <RadarBrandSelector data={data} />
+             <BrandNetwork data={chartData} />
+             <RadarBrandSelector data={chartData} />
           </div>
+        )}
 
+        {(activeTab === 'summary' || allTabsExporting) && (
         <div className={activeTab === 'summary' ? 'space-y-6' : 'hidden'} id="summary-tab-content">
-            <CompetitorCompare rankings={data.rankings} dimensions={data.dimensions} />
-            <DecisionTree dimensions={data.dimensions} rankings={data.rankings} />
+            <CompetitorCompare rankings={data.rankings} dimensions={chartData.dimensions} />
+            <DecisionTree dimensions={chartData.dimensions} rankings={data.rankings} />
             <EnhancedSummary recommendation={data.recommendation} />
           </div>
+        )}
 
         <div className={activeTab === 'sources' ? 'space-y-6' : 'hidden'} id="sources-tab-content">
             {data.video_sources && data.video_sources.length > 0 ? (

@@ -127,7 +127,7 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `backend/models/raw_comments.go`, `backend/task/executor.go`, `backend/api/history.go`, `backend/api` reanalyze handler, report UI drill-in.
 
-- [ ] PR5 merged
+- [x] PR5 merged
 
 ---
 

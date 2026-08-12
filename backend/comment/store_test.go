@@ -1,6 +1,8 @@
 package comment
 
 import (
+	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -35,5 +37,27 @@ func TestPersistAndLoadByHistory(t *testing.T) {
 	}
 	if loaded[0].Content == "" || loaded[1].Content == "" {
 		t.Fatal("stored comments lost content")
+	}
+
+	encoded, err := json.Marshal(loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(encoded, []byte(`"content"`)) {
+		t.Fatalf("API JSON must use content key, got %s", encoded)
+	}
+
+	history.CreatedAt = history.CreatedAt.AddDate(0, 0, -4)
+	database.DB.Save(&history)
+	database.DB.Model(&models.RawComment{}).Where("history_id = ?", history.ID).Update("created_at", history.CreatedAt)
+	if err := database.CleanOldComments(); err != nil {
+		t.Fatal(err)
+	}
+	still, err := LoadByHistory(history.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(still) != 2 {
+		t.Fatalf("live history comments must survive cleanup, got %d", len(still))
 	}
 }

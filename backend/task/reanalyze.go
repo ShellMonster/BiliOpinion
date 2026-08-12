@@ -13,11 +13,6 @@ import (
 	"bilibili-analyzer/backend/report"
 )
 
-// scrapeHook exists so tests can prove re-analyze never enters Bilibili scrape.
-var scrapeHook = func() {
-	// production re-analyze path never assigns this to a real scraper.
-}
-
 func ReanalyzeFromStore(ctx context.Context, historyID uint) (uint, error) {
 	var history models.AnalysisHistory
 	if err := database.DB.First(&history, historyID).Error; err != nil {
@@ -31,7 +26,7 @@ func ReanalyzeFromStore(ctx context.Context, historyID uint) (uint, error) {
 		return 0, fmt.Errorf("没有可重分析的已存评论")
 	}
 
-	settings, err := (&Executor{}).loadSettings()
+	settings, err := loadAISettingsOnly()
 	if err != nil {
 		return 0, err
 	}
@@ -106,4 +101,23 @@ func ReanalyzeFromStore(ctx context.Context, historyID uint) (uint, error) {
 	}
 	exec.updateHistoryWithReport(history.ID, reportID)
 	return reportID, nil
+}
+
+func loadAISettingsOnly() (*AppSettings, error) {
+	get := func(key string) string {
+		var setting models.Settings
+		if err := database.DB.Where("key = ?", key).First(&setting).Error; err != nil {
+			return ""
+		}
+		return setting.Value
+	}
+	settings := &AppSettings{
+		AIBaseURL: get(models.SettingKeyAIAPIBase),
+		AIAPIKey:  get(models.SettingKeyAIAPIKey),
+		AIModel:   get(models.SettingKeyAIModel),
+	}
+	if settings.AIAPIKey == "" {
+		return nil, fmt.Errorf("请先配置AI API Key")
+	}
+	return settings, nil
 }

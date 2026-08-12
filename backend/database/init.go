@@ -78,7 +78,10 @@ func CleanOldComments() error {
 	threeDaysAgo := time.Now().AddDate(0, 0, -3)
 
 	// 执行删除操作
-	result := DB.Where("created_at < ?", threeDaysAgo).Delete(&models.RawComment{})
+	result := DB.Where(
+		"created_at < ? AND history_id NOT IN (SELECT id FROM analysis_histories)",
+		threeDaysAgo,
+	).Delete(&models.RawComment{})
 	if result.Error != nil {
 		return result.Error
 	}

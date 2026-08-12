@@ -11,12 +11,12 @@ import (
 )
 
 type StoredComment struct {
-	HistoryID uint
-	VideoID   string
-	CommentID string
-	Content   string
-	Author    string
-	Likes     int
+	HistoryID uint   `json:"history_id"`
+	VideoID   string `json:"video_id"`
+	CommentID string `json:"comment_id"`
+	Content   string `json:"content"`
+	Author    string `json:"author"`
+	Likes     int    `json:"likes"`
 }
 
 func PersistForHistory(historyID uint, comments []bilibili.Comment, videoByKey map[string]string) error {
@@ -47,7 +47,7 @@ func PersistForHistory(historyID uint, comments []bilibili.Comment, videoByKey m
 			PublishTime: time.Unix(c.Ctime, 0),
 		})
 	}
-	return database.DB.Create(&rows).Error
+	return database.DB.CreateInBatches(&rows, 100).Error
 }
 
 func LoadByHistory(historyID uint) ([]StoredComment, error) {

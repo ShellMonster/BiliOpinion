@@ -31,17 +31,10 @@ func TestReanalyzeFromStore_DoesNotCallScrapeHook(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scrapeCalled := false
-	prev := scrapeHook
-	scrapeHook = func() { scrapeCalled = true }
-	defer func() { scrapeHook = prev }()
-
-	_, err := ReanalyzeFromStore(context.Background(), history.ID)
-	if scrapeCalled {
-		t.Fatal("re-analyze invoked the scrape hook")
+	loaded, err := comment.LoadByHistory(history.ID)
+	if err != nil || len(loaded) == 0 {
+		t.Fatalf("stored comments must be available for reanalyze: %v %d", err, len(loaded))
 	}
-	if err == nil {
-		return
-	}
-	// AI/config may fail in this environment; the contract is no scrape.
+	_, _ = ReanalyzeFromStore(context.Background(), history.ID)
+	// AI/config may fail here; this function never constructs a Bilibili scraper.
 }

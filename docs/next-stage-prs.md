@@ -54,7 +54,7 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `backend/main.go`, `backend/api/config.go`, `backend/task/recovery.go`, new tests.
 
-- [ ] PR1 merged
+- [x] PR1 merged
 
 ---
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import html2canvas from 'html2canvas-pro'
 import * as XLSX from 'xlsx'
 import { useReportData } from '../hooks/useReportData'
@@ -21,6 +21,7 @@ import { DecisionTree } from '../components/Report/DecisionTree'
 import { VideoSourceList } from '../components/Report/VideoSourceList'
 import type { SentimentStats, ModelRanking } from '../types/report'
 import { filterReportByDimensions, overviewRecommendation } from '../lib/reportView'
+import { scoreToneBadgeClass } from '../lib/scoreTone'
 
 type TabType = 'overview' | 'charts' | 'summary' | 'sources'
 
@@ -33,9 +34,17 @@ const Report = () => {
   const [allTabsExporting, setAllTabsExporting] = useState(false)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [selectedDims, setSelectedDims] = useState<string[]>([])
+  const [dimsInitialized, setDimsInitialized] = useState(false)
   const [hideUnknown, setHideUnknown] = useState(true)
   const [hideZeroScore, setHideZeroScore] = useState(true)
   const { showToast } = useToast()
+
+  useEffect(() => {
+    if (!dimsInitialized && report?.data?.dimensions?.length) {
+      setSelectedDims(report.data.dimensions.map((d) => d.name))
+      setDimsInitialized(true)
+    }
+  }, [report, dimsInitialized])
 
   // 导出全部标签页为图片
   const handleExportAllTabsImage = async () => {
@@ -48,21 +57,25 @@ const Report = () => {
     console.log('[AllTabsImage] 开始导出全部标签页')
 
     setAllTabsExporting(true)
+    let originalClasses: { overview: string; charts: string; summary: string; sources: string } | null = null
+    let overviewContent: HTMLElement | null = null
+    let chartsContent: HTMLElement | null = null
+    let summaryContent: HTMLElement | null = null
+    let sourcesContent: HTMLElement | null = null
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      const overviewContent = document.getElementById('overview-tab-content')
-      const chartsContent = document.getElementById('charts-tab-content')
-      const summaryContent = document.getElementById('summary-tab-content')
-      const sourcesContent = document.getElementById('sources-tab-content')
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      overviewContent = document.getElementById('overview-tab-content')
+      chartsContent = document.getElementById('charts-tab-content')
+      summaryContent = document.getElementById('summary-tab-content')
+      sourcesContent = document.getElementById('sources-tab-content')
 
       if (!overviewContent || !chartsContent || !summaryContent || !sourcesContent) {
         showToast('无法找到标签页内容', 'error')
         return
       }
 
-      // 保存原始的class状态
-      const originalClasses = {
+      originalClasses = {
         overview: overviewContent.className,
         charts: chartsContent.className,
         summary: summaryContent.className,
@@ -142,21 +155,20 @@ const Report = () => {
       link.click()
       document.body.removeChild(link)
 
-      // 清理隐藏容器
       document.body.removeChild(hiddenContainer)
-
-      // 恢复原始的class状态
-      overviewContent.className = originalClasses.overview
-      chartsContent.className = originalClasses.charts
-      summaryContent.className = originalClasses.summary
-      sourcesContent.className = originalClasses.sources
-
-      console.log('[AllTabsImage] 导出成功，状态已恢复')
       showToast('全部标签页图片导出成功', 'success')
     } catch (error) {
       console.error('[AllTabsImage] 导出失败:', error)
       showToast(`导出全部图片失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
     } finally {
+      const leftover = document.getElementById('hidden-export-container')
+      leftover?.parentNode?.removeChild(leftover)
+      if (originalClasses) {
+        if (overviewContent) overviewContent.className = originalClasses.overview
+        if (chartsContent) chartsContent.className = originalClasses.charts
+        if (summaryContent) summaryContent.className = originalClasses.summary
+        if (sourcesContent) sourcesContent.className = originalClasses.sources
+      }
       setAllTabsExporting(false)
     }
   }
@@ -307,9 +319,8 @@ const Report = () => {
     { key: 'summary', label: '深度总结' },
     { key: 'sources', label: '数据来源' }
   ]
-  const currentDims = selectedDims.length ? selectedDims : data.dimensions.map(d => d.name)
-  const chartData = filterReportByDimensions(data, currentDims)
-  const recommendation = overviewRecommendation(data)
+  const chartData = filterReportByDimensions(data, selectedDims)
+  const recommendation = overviewRecommendation(data, { hideUnknown })
 
   // 过滤后的数据
   const filteredRankings = data.rankings?.filter(r => {
@@ -520,11 +531,7 @@ const Report = () => {
                           <td className="px-4 py-3 font-medium text-gray-900">{model.model}</td>
                           <td className="px-4 py-3 text-gray-600">{model.brand}</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center px-2 py-1 rounded text-sm font-medium ${
-                              model.overall_score >= 8 ? 'bg-green-100 text-green-700' :
-                              model.overall_score >= 6 ? 'bg-blue-100 text-blue-700' :
-                              'bg-amber-100 text-amber-700'
-                            }`}>
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-sm font-medium border ${scoreToneBadgeClass(model.overall_score)}`}>
                               {model.overall_score.toFixed(1)}
                             </span>
                           </td>
@@ -556,7 +563,7 @@ const Report = () => {
 
         {(activeTab === 'charts' || allTabsExporting) && (
         <div className={activeTab === 'charts' ? 'space-y-6' : 'hidden'} id="charts-tab-content">
-             <DimensionFilter dimensions={data.dimensions} selectedDimensions={currentDims} onChange={setSelectedDims} />
+             <DimensionFilter dimensions={data.dimensions} selectedDimensions={selectedDims} onChange={setSelectedDims} />
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                <BrandRadarChart data={chartData} />
                <BrandScoreChart data={chartData} />
@@ -569,13 +576,11 @@ const Report = () => {
           </div>
         )}
 
-        {(activeTab === 'summary' || allTabsExporting) && (
         <div className={activeTab === 'summary' ? 'space-y-6' : 'hidden'} id="summary-tab-content">
-            <CompetitorCompare rankings={data.rankings} dimensions={chartData.dimensions} />
-            <DecisionTree dimensions={chartData.dimensions} rankings={data.rankings} />
+            <CompetitorCompare rankings={data.rankings} dimensions={data.dimensions} />
+            <DecisionTree dimensions={data.dimensions} rankings={data.rankings} />
             <EnhancedSummary recommendation={data.recommendation} />
           </div>
-        )}
 
         <div className={activeTab === 'sources' ? 'space-y-6' : 'hidden'} id="sources-tab-content">
             {data.video_sources && data.video_sources.length > 0 ? (

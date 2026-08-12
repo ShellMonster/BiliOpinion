@@ -110,7 +110,7 @@ Do not start PR N+1 until PR N is merged and this file is updated.
 
 **Files:** `frontend/src/pages/Confirm.tsx`, `frontend/src/api/*`, `frontend/vite.config.ts`, `backend/report/generator.go`, `backend/ai/*`, `frontend/src/pages/Settings.tsx`.
 
-- [ ] PR4 merged
+- [x] PR4 merged
 
 ---
 

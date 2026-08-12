@@ -31,20 +31,41 @@ const reportBody = {
 
 test.describe('商品主路径', () => {
   test('需求 → 确认 → 进度完成 → 报告', async ({ page }) => {
+    await page.addInitScript(() => {
+      class MockEventSource {
+        constructor() {
+          setTimeout(() => {
+            if (typeof this.onmessage === 'function') {
+              this.onmessage({
+                data: JSON.stringify({
+                  status: 'completed',
+                  message: '分析完成',
+                  progress: { current: 100, total: 100, stage: '99' },
+                }),
+              })
+            }
+          }, 80)
+        }
+        close() {}
+      }
+      window.EventSource = MockEventSource
+    })
+
     await page.route('**/api/parse', async (route) => {
       await route.fulfill({ json: parseBody })
     })
     await page.route('**/api/confirm', async (route) => {
       await route.fulfill({ json: { task_id: 'task-e2e', message: 'ok' } })
     })
+    // Progress restore: in-progress so the page connects SSE (mocked above).
     await page.route('**/api/history/task-e2e', async (route) => {
       await route.fulfill({
         json: {
           id: 1,
           taskId: 'task-e2e',
-          status: 'completed',
-          reportId: 99,
-          progressMsg: '分析完成',
+          status: 'processing',
+          reportId: 0,
+          progressMsg: '正在分析',
         },
       })
     })
@@ -64,8 +85,9 @@ test.describe('商品主路径', () => {
 
     await page.getByRole('button', { name: /确认开始分析/ }).click()
 
+    await expect(page).toHaveURL(/\/progress\/task-e2e/)
     await expect(page).toHaveURL(/\/report\/99/)
-    await expect(page.getByRole('heading', { name: '戴森' }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: '戴森', level: 2 })).toBeVisible()
     await expect(page.getByText('推荐', { exact: true })).toBeVisible()
   })
 })

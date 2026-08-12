@@ -54,19 +54,46 @@ func TestRecoverIncompleteTasks_MarksProcessingFailedWithoutNewRow(t *testing.T)
 
 func TestRecoverIncompleteTasks_RecentProcessingAlsoFailsNoRerun(t *testing.T) {
 	setupRecoveryDB(t)
-	row := models.AnalysisHistory{
-		TaskID:        "task-recent",
-		Category:      "键盘",
-		Keywords:      `["机械键盘"]`,
-		Brands:        `["HHKB"]`,
-		Dimensions:    `["手感"]`,
-		Status:        models.StatusProcessing,
-		Stage:         "analyzing",
-		Progress:      60,
-		LastHeartbeat: time.Now(),
+	now := time.Now()
+	rows := []models.AnalysisHistory{
+		{
+			TaskID:        "task-recent",
+			Category:      "键盘",
+			Keywords:      `["机械键盘"]`,
+			Brands:        `["HHKB"]`,
+			Dimensions:    `["手感"]`,
+			Status:        models.StatusProcessing,
+			Stage:         "analyzing",
+			Progress:      60,
+			LastHeartbeat: now,
+		},
+		{
+			TaskID:        "task-done",
+			Category:      "耳机",
+			Keywords:      `[]`,
+			Brands:        `[]`,
+			Dimensions:    `[]`,
+			Status:        models.StatusCompleted,
+			Stage:         "generating",
+			Progress:      100,
+			LastHeartbeat: now,
+		},
+		{
+			TaskID:        "task-pending",
+			Category:      "投影",
+			Keywords:      `[]`,
+			Brands:        `[]`,
+			Dimensions:    `[]`,
+			Status:        models.StatusPending,
+			Stage:         "initializing",
+			Progress:      0,
+			LastHeartbeat: now,
+		},
 	}
-	if err := database.DB.Create(&row).Error; err != nil {
-		t.Fatalf("create history: %v", err)
+	for i := range rows {
+		if err := database.DB.Create(&rows[i]).Error; err != nil {
+			t.Fatalf("create history: %v", err)
+		}
 	}
 
 	RecoverIncompleteTasks()
@@ -78,10 +105,27 @@ func TestRecoverIncompleteTasks_RecentProcessingAlsoFailsNoRerun(t *testing.T) {
 	if stored.Status != models.StatusFailed {
 		t.Fatalf("leftover processing must be marked failed (no re-run), got %q", stored.Status)
 	}
+	if stored.Stage != "analyzing" || stored.Progress != 60 {
+		t.Fatalf("recovery must not mutate stage/progress, got %q %d", stored.Stage, stored.Progress)
+	}
+
+	assertStatus(t, "task-done", models.StatusCompleted)
+	assertStatus(t, "task-pending", models.StatusPending)
 
 	var count int64
 	database.DB.Model(&models.AnalysisHistory{}).Count(&count)
-	if count != 1 {
-		t.Fatalf("must keep a single row, got %d", count)
+	if count != 3 {
+		t.Fatalf("must keep existing rows only, got %d", count)
+	}
+}
+
+func assertStatus(t *testing.T, taskID, want string) {
+	t.Helper()
+	var row models.AnalysisHistory
+	if err := database.DB.Where("task_id = ?", taskID).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.Status != want {
+		t.Fatalf("%s status want %q got %q", taskID, want, row.Status)
 	}
 }

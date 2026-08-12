@@ -1,15 +1,20 @@
 package api
 
 import (
-	"strings"
+	"net"
 	"testing"
 )
 
 func TestListenAddr_IsLoopbackOnly(t *testing.T) {
-	if ListenAddr != "127.0.0.1:8080" {
-		t.Fatalf("server must listen on 127.0.0.1:8080, got %q", ListenAddr)
+	host, port, err := net.SplitHostPort(ListenAddr)
+	if err != nil {
+		t.Fatalf("ListenAddr must be host:port, got %q: %v", ListenAddr, err)
 	}
-	if strings.HasPrefix(ListenAddr, ":") || strings.HasPrefix(ListenAddr, "0.0.0.0") {
-		t.Fatalf("must not bind all interfaces, got %q", ListenAddr)
+	if port != "8080" {
+		t.Fatalf("port must be 8080, got %q", port)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		t.Fatalf("host must be a loopback IP, got %q", host)
 	}
 }

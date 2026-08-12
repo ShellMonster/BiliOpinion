@@ -57,6 +57,12 @@ func TestHandleGetConfig_MasksSecrets(t *testing.T) {
 	if bytes.Contains(w.Body.Bytes(), []byte("SESSDATA=very-secret-session-token")) {
 		t.Fatal("response leaked SESSDATA value")
 	}
+	if bytes.Contains(w.Body.Bytes(), []byte("sk-abcdefghijklmnopqrstuv")) {
+		t.Fatal("response leaked AI key prefix")
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte("very-secret-session-token")) {
+		t.Fatal("response leaked cookie token fragment")
+	}
 
 	var payload map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
@@ -95,14 +101,29 @@ func TestHandleSaveConfig_EmptySecretDoesNotOverwrite(t *testing.T) {
 	if stored.Value != fullKey {
 		t.Fatalf("empty save overwrote API key: got %q", stored.Value)
 	}
+	var cookie models.Settings
+	if err := database.DB.Where("key = ?", models.SettingKeyBilibiliCookie).First(&cookie).Error; err != nil {
+		t.Fatal(err)
+	}
+	if cookie.Value != "SESSDATA=keep-me-cookie-aaaa" {
+		t.Fatalf("empty save overwrote cookie: got %q", cookie.Value)
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte(fullKey)) {
+		t.Fatal("save response leaked API key")
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte("SESSDATA=keep-me-cookie-aaaa")) {
+		t.Fatal("save response leaked cookie")
+	}
 }
 
 func TestHandleSaveConfig_MaskedSecretDoesNotOverwrite(t *testing.T) {
 	setupConfigTestDB(t)
 	fullKey := "sk-keep-this-original-key-9999"
+	fullCookie := "SESSDATA=keep-me-cookie-aaaa"
 	seedSetting(t, models.SettingKeyAIAPIKey, fullKey)
+	seedSetting(t, models.SettingKeyBilibiliCookie, fullCookie)
 
-	reqBody := `{"ai_api_key":"` + MaskSecret(fullKey) + `","bilibili_cookie":""}`
+	reqBody := `{"ai_api_key":"` + MaskSecret(fullKey) + `","bilibili_cookie":"` + MaskSecret(fullCookie) + `"}`
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/config", bytes.NewBufferString(reqBody))
@@ -115,5 +136,18 @@ func TestHandleSaveConfig_MaskedSecretDoesNotOverwrite(t *testing.T) {
 	}
 	if stored.Value != fullKey {
 		t.Fatalf("masked save overwrote API key: got %q", stored.Value)
+	}
+	var cookie models.Settings
+	if err := database.DB.Where("key = ?", models.SettingKeyBilibiliCookie).First(&cookie).Error; err != nil {
+		t.Fatal(err)
+	}
+	if cookie.Value != fullCookie {
+		t.Fatalf("masked save overwrote cookie: got %q", cookie.Value)
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte(fullKey)) {
+		t.Fatal("save response leaked API key")
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte(fullCookie)) {
+		t.Fatal("save response leaked cookie")
 	}
 }

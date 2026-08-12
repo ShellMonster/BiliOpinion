@@ -3,10 +3,24 @@ package api
 import (
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/models"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+func loadSettingValue(key string) (string, error) {
+	var setting models.Settings
+	err := database.DB.Where("key = ?", key).First(&setting).Error
+	if err == nil {
+		return setting.Value, nil
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return "", err
+}
 
 func HandleGetConfig(c *gin.Context) {
 	getSettingValue := func(key string) string {
@@ -58,14 +72,15 @@ func HandleSaveConfig(c *gin.Context) {
 		return database.DB.Save(&setting).Error
 	}
 
-	existingKey := ""
-	existingCookie := ""
-	var existing models.Settings
-	if err := database.DB.Where("key = ?", models.SettingKeyAIAPIKey).First(&existing).Error; err == nil {
-		existingKey = existing.Value
+	existingKey, err := loadSettingValue(models.SettingKeyAIAPIKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load config"})
+		return
 	}
-	if err := database.DB.Where("key = ?", models.SettingKeyBilibiliCookie).First(&existing).Error; err == nil {
-		existingCookie = existing.Value
+	existingCookie, err := loadSettingValue(models.SettingKeyBilibiliCookie)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load config"})
+		return
 	}
 
 	if shouldPreserveSecret(req.AIAPIKey, existingKey) {

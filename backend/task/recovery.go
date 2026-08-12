@@ -32,6 +32,10 @@ func CleanupTimedOutTasks() {
 		Where("status = ? AND last_heartbeat < ?", models.StatusProcessing, cutoff).
 		Update("status", models.StatusFailed)
 
+	if result.Error != nil {
+		log.Printf("[Cleanup] Failed to mark timed out tasks: %v", result.Error)
+		return
+	}
 	if result.RowsAffected > 0 {
 		log.Printf("[Cleanup] Marked %d timed out tasks as failed", result.RowsAffected)
 	}

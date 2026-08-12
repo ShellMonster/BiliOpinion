@@ -20,8 +20,9 @@ func main() {
 
 	log.Println("🚀 Bilibili Analyzer - Backend Server Starting...")
 
-	// 恢复未完成的任务（后端重启后）
-	go task.RecoverIncompleteTasks()
+	// Mark leftover processing tasks failed before accepting traffic
+	// so a new confirm cannot race with a blanket status update.
+	task.RecoverIncompleteTasks()
 
 	// 启动定时清理任务（每5分钟检查一次超时任务）
 	go func() {

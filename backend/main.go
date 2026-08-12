@@ -67,6 +67,8 @@ func main() {
 
 		// 历史记录API
 		apiGroup.GET("/history", api.HandleGetHistory)           // 获取历史记录列表
+		apiGroup.GET("/history/:id/comments", api.HandleListHistoryComments)
+		apiGroup.POST("/history/:id/reanalyze", api.HandleReanalyzeHistory)
 		apiGroup.GET("/history/:id", api.HandleGetHistoryDetail) // 获取历史记录详情
 		apiGroup.DELETE("/history/:id", api.HandleDeleteHistory) // 删除历史记录
 

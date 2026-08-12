@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../common/Modal';
 import type { BrandRanking, BrandAnalysis, TypicalComment, Dimension } from '../../types/report';
 import { scoreToneBadgeClass, scoreToneBarClass } from '../../lib/scoreTone';
@@ -12,6 +12,7 @@ interface BrandDetailModalProps {
   topComments?: TypicalComment[];
   badComments?: TypicalComment[];
   dimensions?: Dimension[];
+  historyId?: number;
 }
 
 /**
@@ -30,8 +31,21 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
   analysis,
   topComments = [],
   badComments = [],
-  dimensions = []
+  dimensions = [],
+  historyId,
 }) => {
+  const [storedComments, setStoredComments] = useState<Array<{ content: string; author?: string }>>([])
+
+  useEffect(() => {
+    if (!isOpen || !historyId) return
+    fetch(`/api/history/${historyId}/comments`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (!Array.isArray(rows)) return
+        setStoredComments(rows.filter((row: { content?: string }) => typeof row.content === 'string' && row.content.includes(brandName)).slice(0, 8))
+      })
+      .catch(() => setStoredComments([]))
+  }, [isOpen, historyId, brandName])
   // 综合得分颜色辅助函数
   const getScoreColor = (score: number) => scoreToneBadgeClass(score);
 
@@ -209,6 +223,18 @@ export const BrandDetailModal: React.FC<BrandDetailModalProps> = ({
               </div>
             </div>
           </div>
+
+          {storedComments.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider">入库原文</h4>
+              {storedComments.map((row, i) => (
+                <div key={i} className="bg-slate-50 p-4 rounded-xl text-sm text-slate-700 leading-relaxed">
+                  {row.author ? <span className="font-medium mr-2">{row.author}</span> : null}
+                  {row.content}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Modal>

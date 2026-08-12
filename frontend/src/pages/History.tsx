@@ -148,6 +148,25 @@ export default function History() {
                       查看报告
                     </Button>
                   )}
+                  {history.status === 'completed' && (
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/history/${history.id}/reanalyze`, { method: 'POST' })
+                          const body = await res.json()
+                          if (!res.ok) throw new Error(body.error || '重分析失败')
+                          if (body.report_id) navigate(`/report/${body.report_id}`)
+                          else showToast('重分析完成', 'success')
+                        } catch (err) {
+                          showToast(err instanceof Error ? err.message : '重分析失败', 'error')
+                        }
+                      }}
+                      className="text-sm px-4 py-2"
+                    >
+                      用原评论重分析
+                    </Button>
+                  )}
                   <Button 
                     variant="secondary" 
                     onClick={() => handleDelete(history.id)}

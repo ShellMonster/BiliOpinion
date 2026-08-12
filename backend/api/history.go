@@ -4,11 +4,11 @@ import (
 	"bilibili-analyzer/backend/database"
 	"bilibili-analyzer/backend/models"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // HistoryListResponse 历史记录列表响应结构
@@ -138,19 +138,16 @@ func HandleDeleteHistory(c *gin.Context) {
 		return
 	}
 
-	// 删除关联的报告数据
-	if history.ReportID > 0 {
-		database.DB.Delete(&models.Report{}, history.ReportID)
-	}
-
-	// 删除关联的原始评论数据
-	result := database.DB.Where("history_id = ?", history.ID).Delete(&models.RawComment{})
-	if result.RowsAffected > 0 {
-		log.Printf("🗑️ 已删除 %d 条关联的原始评论", result.RowsAffected)
-	}
-
-	// 删除历史记录
-	if err := database.DB.Delete(&history).Error; err != nil {
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("history_id = ?", history.ID).Delete(&models.Report{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("history_id = ?", history.ID).Delete(&models.RawComment{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&history).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to delete history record",
 		})

@@ -604,6 +604,7 @@ const Report = () => {
           topComments={data.top_comments?.[selectedBrand]}
           badComments={data.bad_comments?.[selectedBrand]}
           dimensions={data.dimensions}
+          historyId={report.history_id}
         />
       )}
     </div>

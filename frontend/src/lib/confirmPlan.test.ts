@@ -13,6 +13,7 @@ describe('buildConfirmPayload', () => {
       keywords: ['吸尘器评测'],
     })
     expect(payload.brands).toEqual(['戴森', '石头'])
+    expect(payload.dimensions).toEqual([{ name: '吸力', description: '吸尘效果' }])
     expect(payload.keywords).toEqual(['吸尘器评测'])
     expect(payload.budget).toBe('2000元')
     expect(payload.scenario).toBe('家庭')

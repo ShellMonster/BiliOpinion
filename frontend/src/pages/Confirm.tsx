@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { confirmNavigationTarget, parseOutcomeFromResponse } from '../lib/confirmFlow'
 import { addListItem, buildConfirmPayload, removeListItem } from '../lib/confirmPlan'
 import { apiClient } from '../api/client'
+import axios from 'axios'
 
 interface ParseResponse {
   understanding: string
@@ -55,8 +56,12 @@ const Confirm = () => {
           return
         }
         setData(outcome.data as unknown as ParseResponse)
-      } catch {
-        setError('解析需求失败，请检查设置中的 AI 配置')
+      } catch (err) {
+        const apiError = axios.isAxiosError(err) ? err.response?.data : null
+        const message = apiError && typeof apiError === 'object' && 'error' in apiError && typeof apiError.error === 'string'
+          ? apiError.error
+          : '解析需求失败，请检查设置中的 AI 配置'
+        setError(message)
         setData(null)
       } finally {
         setLoading(false)
@@ -94,8 +99,12 @@ const Confirm = () => {
         return
       }
       navigate(nav.href)
-    } catch {
-      setError('创建任务失败，请稍后重试')
+    } catch (err) {
+      const apiError = axios.isAxiosError(err) ? err.response?.data : null
+      const message = apiError && typeof apiError === 'object' && 'error' in apiError && typeof apiError.error === 'string'
+        ? apiError.error
+        : '创建任务失败，请稍后重试'
+      setError(message)
       setSubmitting(false)
     }
   }
@@ -346,7 +355,7 @@ const Confirm = () => {
         {/* Confirm Button */}
         <button
           onClick={handleConfirm}
-          disabled={submitting}
+          disabled={submitting || data.brands.length === 0 || data.dimensions.length === 0 || data.keywords.length === 0}
           className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
           {submitting ? '⏳ 正在创建任务...' : '✓ 确认开始分析'}

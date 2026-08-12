@@ -13,8 +13,11 @@ import (
 )
 
 type ConfirmRequest struct {
-	Requirement string   `json:"requirement"`
-	Brands      []string `json:"brands"`
+	Requirement  string   `json:"requirement"`
+	Budget       string   `json:"budget,omitempty"`
+	Scenario     string   `json:"scenario,omitempty"`
+	SpecialNeeds []string `json:"special_needs,omitempty"`
+	Brands       []string `json:"brands"`
 	Dimensions  []struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -77,11 +80,14 @@ func HandleConfirm(c *gin.Context) {
 
 		executor := task.NewExecutor(config)
 		err := executor.Execute(context.Background(), task.TaskRequest{
-			TaskID:      taskID,
-			Requirement: req.Requirement,
-			Brands:      req.Brands,
-			Dimensions:  dimensions,
-			Keywords:    req.Keywords,
+			TaskID:       taskID,
+			Requirement:  req.Requirement,
+			Budget:       req.Budget,
+			Scenario:     req.Scenario,
+			SpecialNeeds: req.SpecialNeeds,
+			Brands:       req.Brands,
+			Dimensions:   dimensions,
+			Keywords:     req.Keywords,
 		})
 
 		if err != nil {

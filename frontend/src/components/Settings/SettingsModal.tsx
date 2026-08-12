@@ -31,7 +31,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // Load settings from backend API when modal opens
   useEffect(() => {
     if (isOpen) {
-      fetch('http://localhost:8080/api/config')
+      fetch('/api/config')
         .then(res => res.json())
         .then(data => {
           setSettings({
@@ -57,7 +57,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     localStorage.setItem('settings', JSON.stringify(settings))
     
     try {
-      const res = await fetch('http://localhost:8080/api/config', {
+      const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

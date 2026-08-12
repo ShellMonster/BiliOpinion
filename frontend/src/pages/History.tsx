@@ -30,7 +30,7 @@ export default function History() {
   const fetchHistories = async () => {
     try {
       setLoading(true)
-      const response = await fetch('http://localhost:8080/api/history')
+      const response = await fetch('/api/history')
       if (!response.ok) throw new Error('Failed to fetch histories')
       const data = await response.json()
       setHistories(data || [])
@@ -49,7 +49,7 @@ export default function History() {
     if (deleteId === null) return
 
     try {
-      const response = await fetch(`http://localhost:8080/api/history/${deleteId}`, {
+      const response = await fetch(`/api/history/${deleteId}`, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Failed to delete history')

@@ -90,11 +90,14 @@ func DefaultTaskConfig() TaskConfig {
 
 // TaskRequest 任务请求
 type TaskRequest struct {
-	TaskID      string         // 任务ID
-	Requirement string         // 用户原始需求
-	Brands      []string       // 品牌列表
-	Dimensions  []ai.Dimension // 评价维度
-	Keywords    []string       // 搜索关键词
+	TaskID       string         // 任务ID
+	Requirement  string         // 用户原始需求
+	Budget       string
+	Scenario     string
+	SpecialNeeds []string
+	Brands       []string       // 品牌列表
+	Dimensions   []ai.Dimension // 评价维度
+	Keywords     []string       // 搜索关键词
 }
 
 // CommentWithVideo 带视频信息的评论
@@ -342,7 +345,7 @@ func (e *Executor) Execute(ctx context.Context, req TaskRequest) error {
 
 	// 使用AI生成更专业的购买建议
 	sse.PushProgress(taskID, sse.StatusGenerating, 90, 100, "正在生成AI购买建议...")
-	aiRecommendation, err := e.generateAIRecommendation(ctx, aiClient, reportData)
+	aiRecommendation, err := e.generateAIRecommendation(ctx, aiClient, reportData, req)
 	if err == nil && aiRecommendation != "" {
 		reportData.Recommendation = aiRecommendation
 	}
@@ -980,7 +983,7 @@ func max(a, b int) int {
 	return b
 }
 
-func (e *Executor) generateAIRecommendation(ctx context.Context, aiClient *ai.Client, reportData *report.ReportData) (string, error) {
+func (e *Executor) generateAIRecommendation(ctx context.Context, aiClient *ai.Client, reportData *report.ReportData, req TaskRequest) (string, error) {
 	rankings := make([]ai.BrandRankingInfo, len(reportData.Rankings))
 	for i, r := range reportData.Rankings {
 		rankings[i] = ai.BrandRankingInfo{
@@ -1011,6 +1014,9 @@ func (e *Executor) generateAIRecommendation(ctx context.Context, aiClient *ai.Cl
 
 	return aiClient.GenerateRecommendation(ctx, ai.RecommendationInput{
 		Category:      reportData.Category,
+		Budget:        req.Budget,
+		Scenario:      req.Scenario,
+		SpecialNeeds:  req.SpecialNeeds,
 		Rankings:      rankings,
 		BrandAnalysis: brandAnalysis,
 		ModelRankings: modelRankings,

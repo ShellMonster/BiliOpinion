@@ -344,6 +344,9 @@ func (c *Client) AnalyzeCommentsWithRateLimit(ctx context.Context, comments []Co
 // RecommendationInput AI生成购买建议的输入数据
 type RecommendationInput struct {
 	Category      string
+	Budget        string
+	Scenario      string
+	SpecialNeeds  []string
 	Rankings      []BrandRankingInfo
 	BrandAnalysis map[string]BrandStrengthWeakness
 	ModelRankings []ModelRankingInfo
@@ -377,41 +380,19 @@ func (c *Client) GenerateRecommendation(ctx context.Context, input Recommendatio
 		return "暂无足够数据生成购买建议", nil
 	}
 
-	var rankingText string
-	for _, r := range input.Rankings {
-		analysis := input.BrandAnalysis[r.Brand]
-		rankingText += fmt.Sprintf("第%d名：%s（%.1f分）", r.Rank, r.Brand, r.OverallScore)
-		if len(analysis.Strengths) > 0 {
-			rankingText += fmt.Sprintf("，优势：%v", analysis.Strengths)
-		}
-		if len(analysis.Weaknesses) > 0 {
-			rankingText += fmt.Sprintf("，劣势：%v", analysis.Weaknesses)
-		}
-		rankingText += "\n"
-	}
-
 	systemPrompt := `你是一位专业的商品评测专家。请根据以下品牌评分和优劣势分析，生成一段200-300字的专业购买建议。
 要求：
 1. 客观分析各品牌的优缺点
 2. 针对不同用户需求给出具体建议
-3. 语言专业但易懂
-4. 使用Markdown格式输出，包括：
+3. 若提供了预算、使用场景或特殊需求，必须在建议中明确回应
+4. 语言专业但易懂
+5. 使用Markdown格式输出，包括：
    - 使用 ## 作为小标题
    - 使用 **加粗** 强调重点
    - 使用 - 列表展示要点
    - 使用 > 引用块突出关键建议`
 
-	var modelText string
-	if len(input.ModelRankings) > 0 {
-		modelText = "\n\n型号排名：\n"
-		for _, m := range input.ModelRankings {
-			modelText += fmt.Sprintf("第%d名：%s %s（%.1f分，%d条评论）\n",
-				m.Rank, m.Brand, m.Model, m.OverallScore, m.CommentCount)
-		}
-	}
-
-	userPrompt := fmt.Sprintf("商品类别：%s\n\n品牌排名及分析：\n%s%s\n请生成购买建议：",
-		input.Category, rankingText, modelText)
+	userPrompt := BuildRecommendationUserPrompt(input)
 
 	messages := []Message{
 		{Role: "system", Content: systemPrompt},

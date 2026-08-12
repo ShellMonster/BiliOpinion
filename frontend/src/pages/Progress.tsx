@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { progressStepsForMode, resolveProgressRestore } from '../lib/progressRestore'
 
 interface Step {
   id: number
@@ -24,71 +25,112 @@ const Progress = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const title = searchParams.get('title') || '分析任务'
+  const mode = searchParams.get('mode') === 'video' ? 'video' : 'product'
   const eventSourceRef = useRef<EventSource | null>(null)
+  const terminalRef = useRef(false)
 
   const [progress, setProgress] = useState(0)
   const [message, setMessage] = useState('正在连接服务器...')
   const [error, setError] = useState<string | null>(null)
-  const [steps, setSteps] = useState<Step[]>([
-    { id: 1, label: '搜索相关视频', status: 'pending' },
-    { id: 2, label: '抓取视频评论', status: 'pending' },
-    { id: 3, label: 'AI 分析评论内容', status: 'pending' },
-    { id: 4, label: '生成分析报告', status: 'pending' }
-  ])
+  const [steps, setSteps] = useState<Step[]>(() =>
+    progressStepsForMode(mode).map((label, index) => ({
+      id: index + 1,
+      label,
+      status: 'pending' as const,
+    })),
+  )
 
   useEffect(() => {
     if (!id) {
-      console.error('[Progress] No task_id provided')
       setError('缺少任务ID')
       return
     }
 
-    const eventSource = new EventSource(`http://localhost:8080/api/sse?task_id=${id}`)
-    eventSourceRef.current = eventSource
+    let cancelled = false
 
-    eventSource.onopen = () => {
-    }
+    const connectSSE = () => {
+      const eventSource = new EventSource(`http://localhost:8080/api/sse?task_id=${id}`)
+      eventSourceRef.current = eventSource
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data: SSEData = JSON.parse(event.data)
-        
-        if (data.message) {
-          setMessage(data.message)
+      eventSource.onmessage = (event) => {
+        if (cancelled) return
+        try {
+          const data: SSEData = JSON.parse(event.data)
+
+          if (data.message) {
+            setMessage(data.message)
+          }
+
+          if (data.progress) {
+            setProgress(data.progress.current)
+          }
+
+          updateStepsFromStatus(data.status, data.progress?.current || 0)
+
+          if (data.status === 'completed') {
+            terminalRef.current = true
+            const reportId = data.progress?.stage
+            eventSource.close()
+            if (reportId) {
+              navigate(`/report/${reportId}`)
+            } else {
+              setError('任务已完成但没有报告')
+            }
+          }
+
+          if (data.status === 'error') {
+            terminalRef.current = true
+            setError(data.error || data.message || '任务执行失败')
+            eventSource.close()
+          }
+        } catch (e) {
+          console.error('[Progress] Failed to parse SSE data:', e, event.data)
         }
+      }
 
-        if (data.progress) {
-          setProgress(data.progress.current)
-        }
-
-        updateStepsFromStatus(data.status, data.progress?.current || 0)
-
-        if (data.status === 'completed') {
-          const reportId = data.progress?.stage
+      eventSource.onerror = () => {
+        if (terminalRef.current || cancelled) {
           eventSource.close()
-          setTimeout(() => {
-            navigate(`/report/${reportId}`)
-          }, 1000)
+          return
         }
-
-        if (data.status === 'error') {
-          console.error('[Progress] Task error:', data.error || data.message)
-          setError(data.error || data.message || '任务执行失败')
-          eventSource.close()
-        }
-      } catch (e) {
-        console.error('[Progress] Failed to parse SSE data:', e, event.data)
+        setError('连接中断，请刷新页面重试')
+        eventSource.close()
       }
     }
 
-    eventSource.onerror = (err) => {
-      console.error('[Progress] SSE connection error:', err)
-      setError('连接中断，请刷新页面重试')
-      eventSource.close()
+    const restore = async () => {
+      try {
+        const response = await fetch(`http://localhost:8080/api/history/${id}`)
+        if (response.ok) {
+          const snapshot = await response.json()
+          const action = resolveProgressRestore({
+            status: snapshot.status,
+            reportId: snapshot.reportId,
+            progressMsg: snapshot.progressMsg,
+          })
+          if (cancelled) return
+          if (action.kind === 'report') {
+            navigate(`/report/${action.reportId}`)
+            return
+          }
+          if (action.kind === 'error') {
+            setError(action.message)
+            return
+          }
+        }
+      } catch {
+        // History lookup is best-effort; fall through to SSE.
+      }
+      if (!cancelled) {
+        connectSSE()
+      }
     }
 
+    restore()
+
     return () => {
-      eventSource.close()
+      cancelled = true
+      eventSourceRef.current?.close()
     }
   }, [id, navigate])
 

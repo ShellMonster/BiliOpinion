@@ -39,17 +39,24 @@ func HandleSSE(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Writer.Header().Set("X-Accel-Buffering", "no") // 禁用Nginx缓冲
 
-	// 获取任务状态通道
-	statusChan, exists := GetTaskChannel(taskID)
-	if !exists {
-		// 任务不存在，创建一个新通道
-		statusChan = CreateTaskChannel(taskID)
-	}
-
-	// 获取Flusher接口，用于实时推送数据
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "不支持流式响应"})
+		return
+	}
+
+	statusChan, exists := GetTaskChannel(taskID)
+	if !exists {
+		if terminal, found := lookupTerminalTask(taskID); found {
+			sendSSEMessage(c.Writer, flusher, terminal)
+			return
+		}
+		sendSSEMessage(c.Writer, flusher, TaskStatus{
+			TaskID:  taskID,
+			Status:  StatusError,
+			Message: "任务不存在或已结束",
+			Error:   "任务不存在或已结束",
+		})
 		return
 	}
 
@@ -136,10 +143,9 @@ func HandleSSEWithHeartbeat(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 
-	// 获取任务状态通道
 	statusChan, exists := GetTaskChannel(taskID)
 	if !exists {
-		statusChan = CreateTaskChannel(taskID)
+		return
 	}
 
 	// 获取Flusher接口

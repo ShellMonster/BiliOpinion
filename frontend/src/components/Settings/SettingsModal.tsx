@@ -3,6 +3,7 @@ import Modal from '../common/Modal'
 import Input from '../common/Input'
 import Button from '../common/Button'
 import { useToast } from '../../hooks/useToast'
+import { settingsSaveOutcome } from '../../lib/settingsSave'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -56,7 +57,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     localStorage.setItem('settings', JSON.stringify(settings))
     
     try {
-      await fetch('http://localhost:8080/api/config', {
+      const res = await fetch('http://localhost:8080/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,11 +69,16 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           ai_max_concurrency: String(aiMaxConcurrency)
         })
       })
+      const outcome = settingsSaveOutcome(res.ok)
+      if (outcome.kind === 'error') {
+        showToast(outcome.message, 'error')
+        return
+      }
+      showToast('设置已保存', 'success')
     } catch (error) {
       console.error('Failed to save to backend:', error)
+      showToast('保存失败', 'error')
     }
-    
-    showToast('设置已保存', 'success')
   }
 
   return (

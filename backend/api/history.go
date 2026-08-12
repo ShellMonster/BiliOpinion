@@ -26,6 +26,7 @@ type HistoryListResponse struct {
 // HistoryDetailResponse 历史记录详情响应结构
 type HistoryDetailResponse struct {
 	ID           uint     `json:"id"`           // 历史记录ID
+	TaskId       string   `json:"taskId"`       // 任务ID
 	Category     string   `json:"category"`     // 商品类目
 	Keywords     []string `json:"keywords"`     // 搜索关键词
 	Brands       []string `json:"brands"`       // 品牌列表
@@ -33,6 +34,8 @@ type HistoryDetailResponse struct {
 	VideoCount   int      `json:"videoCount"`   // 视频数量
 	CommentCount int      `json:"commentCount"` // 评论数量
 	Status       string   `json:"status"`       // 任务状态
+	ReportID     uint     `json:"reportId"`     // 关联的报告ID
+	ProgressMsg  string   `json:"progressMsg"`  // 失败或进度说明
 	ReportData   string   `json:"reportData"`   // 报告JSON数据
 	CreatedAt    string   `json:"createdAt"`    // 创建时间
 }
@@ -73,19 +76,9 @@ func HandleGetHistory(c *gin.Context) {
 // GET /api/history/:id
 // 返回指定ID的历史记录详细信息，包括关联的报告数据
 func HandleGetHistoryDetail(c *gin.Context) {
-	// 获取URL参数中的ID
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	history, err := findHistoryByIDOrTaskID(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid history ID",
-		})
-		return
-	}
-
-	// 查询历史记录
-	var history models.AnalysisHistory
-	if err := database.DB.First(&history, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "History record not found",
 		})
@@ -105,6 +98,7 @@ func HandleGetHistoryDetail(c *gin.Context) {
 	// 这里直接返回原始JSON字符串，前端负责解析
 	response := HistoryDetailResponse{
 		ID:           history.ID,
+		TaskId:       history.TaskID,
 		Category:     history.Category,
 		Keywords:     parseJSONArray(history.Keywords),
 		Brands:       parseJSONArray(history.Brands),
@@ -112,6 +106,8 @@ func HandleGetHistoryDetail(c *gin.Context) {
 		VideoCount:   history.VideoCount,
 		CommentCount: history.CommentCount,
 		Status:       history.Status,
+		ReportID:     history.ReportID,
+		ProgressMsg:  history.ProgressMsg,
 		ReportData:   reportData,
 		CreatedAt:    history.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
@@ -164,6 +160,20 @@ func HandleDeleteHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "History record deleted successfully",
 	})
+}
+
+// findHistoryByIDOrTaskID looks up by numeric primary key first, then task_id.
+func findHistoryByIDOrTaskID(idStr string) (models.AnalysisHistory, error) {
+	var history models.AnalysisHistory
+	if id, err := strconv.ParseUint(idStr, 10, 32); err == nil {
+		if err := database.DB.First(&history, id).Error; err == nil {
+			return history, nil
+		}
+	}
+	if err := database.DB.Where("task_id = ?", idStr).First(&history).Error; err != nil {
+		return history, err
+	}
+	return history, nil
 }
 
 // parseJSONArray 解析JSON数组字符串为字符串切片
